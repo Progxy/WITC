@@ -7,11 +7,12 @@ For more information see the `Roadmap` below.
 > Note that the following is under "active" development (take that into consideration).
 
 ## Roadmap:
- - [] Support all AMD64 mnemonics;
- - [] Add support for instructions fields for better instruction decoding;
- - [] Add support for binary file decoding;
- - [] Support all Intel mnemonics (switch decoding architecture using flags);
- - [] Support all ARM mnemonics;
+ - [ ] Add support for all AMD64 mnemonics;
+ - [ ] Add support for instructions fields for better instruction decoding;
+ - [ ] Add support for binary file decoding;
+ - [ ] Add support for all Intel mnemonics (switch decoding architecture using flags);
+ - [ ] Add support for all ARM mnemonics;
+ - [ ] Fancy features (to be expanded upon later).
 
 ## References:
  - http://ref.x86asm.net/coder64.html#x68
