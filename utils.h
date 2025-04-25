@@ -28,6 +28,9 @@ typedef struct InsInfo {
 
 #ifdef _SUPPORT_FUNCTIONS_
 
+#define MAX(a, b) ((a) >= (b) ? (a) : (b)) 
+#define MIN(a, b) ((a) <= (b) ? (a) : (b)) 
+
 #define CAST_PTR(ptr, type) ((type*) (ptr))
 
 static size_t str_len(const char* str) {
@@ -47,6 +50,17 @@ static char* str_cpy(char* dest, const char* restrict src) {
 	if (dest == NULL || src == NULL) return NULL;
 	mem_cpy((void*) dest, (void*) src, str_len(src) + 1);
 	return (char*) dest;
+}
+
+static const char hex_chrs[16] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
+
+static void byte_str_into_hex_str(char* str, u8* byte_str, u8 byte_size) {
+	for (u8 i = 0, j = 0; i < byte_size; ++i, ++j) {
+		str[j++] = hex_chrs[(byte_str[i] >> 4) & 0xF];
+		str[j] = hex_chrs[byte_str[i] & 0xF];
+		if (i < byte_size - 1) str[++j] = ' ';
+	}
+	return;
 }
 
 #endif //_SUPPORT_FUNCTIONS_

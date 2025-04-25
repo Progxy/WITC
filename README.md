@@ -13,3 +13,6 @@ For more information see the `Roadmap` below.
  - [] Support all Intel mnemonics (switch decoding architecture using flags);
  - [] Support all ARM mnemonics;
 
+## References:
+ - http://ref.x86asm.net/coder64.html#x68
+
