@@ -1,8 +1,16 @@
 C-FLAGS = -std=c11 -Wall -Wextra -pedantic
 
+all: witc_test test.bin
+
 witc_test: witc_test.c witc.h utils.h
 	gcc -ggdb $(C-FLAGS) $< -o $@
 
-clean: witc_test
-	rm -rf witc_test
+test.bin: test.asm
+	fasm $< $@
+
+test: witc_test test.bin
+	./witc_test test.bin
+
+clean: witc_test test.bin
+	rm -rf witc_test test.bin
 

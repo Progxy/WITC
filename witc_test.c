@@ -5,26 +5,19 @@
 #define _SPECIAL_TYPE_SUPPORT_
 #include "./witc.h"
 
-// -------------------
-//  Test Machine Code
-// -------------------
-/// Disassembled:
-/// 	cli
-/// 	iretq
-static const u8  uefi_timer_data[] = {0xFA, 0x48, 0xCF};
-static const u64 uefi_timer_size = 3;
-
-/// Disassembled:
-/// 	finit (= wait & fninit)
-/// 	hlt
-static const u8  uefi_setup_data[] = {0x9B, 0xDB, 0xE3, 0xF4};
-static const u64 uefi_setup_size = 4;
-
-// ---------------------------------------------------------------
-
-int main(void) {
-	u64 size = uefi_setup_size;
-	u8* ptr = (u8*) uefi_setup_data;
+int main(int argc, char** argv) {
+	if (argc < 2) {
+		printf("Usage: witc_test <input-binary>\n");
+		return 69;
+	}
+	
+	u64 size = 0;
+	u8* ptr = NULL;
+	const char* bin_path = argv[1];
+	if (read_bin(bin_path, &size, &ptr) < 0) {
+		printf("An error occurred while reading the binary file: '%s'\n", bin_path);
+		return 69;
+	}
 
 	printf("\n");
 	printf("\t╔══════════════════════════════════════════════════════════════════════╗\n");

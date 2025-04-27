@@ -74,4 +74,45 @@ static void byte_str_into_hex_str(char* str, u8* byte_str, u8 byte_size) {
 
 #endif //_SUPPORT_FUNCTIONS_
 
+static int read_bin(const char* bin_path, u64* bin_size, u8** bin_data) {
+	FILE* bin_file = NULL;
+	if ((bin_file = fopen(bin_path, "rb")) == NULL) {
+		perror("Failed to read the binary file");
+		return -1;
+	}
+
+	if (fseek(bin_file, 0, SEEK_END) < 0) {
+		perror("Failed to seek to the end of the binary file");
+		return -1;
+	}
+	
+	*bin_size = ftell(bin_file);
+	if ((long int) *bin_size < 0) {
+		perror("Failed to read the binary file size");
+		return -1;
+	}
+	
+	if (fseek(bin_file, 0, SEEK_SET) < 0) {
+		perror("Failed to seek to the start of the binary file");
+		return -1;
+	}
+
+	if ((*bin_data = calloc(*bin_size, sizeof(u8))) == NULL) {
+		perror("Failed to allocate the binary data buffer");
+		fclose(bin_file);
+		return -1;
+	}
+	
+	size_t ret = 0;
+	if ((ret = fread(*bin_data, sizeof(u8), *bin_size, bin_file)) != (size_t) *bin_size) {
+		perror("Failed to read the content of the bin file");
+		free(*bin_data);
+		return -1;
+	}
+
+	fclose(bin_file);
+
+	return 0;
+}
+
 #endif //_UTILS_H_
