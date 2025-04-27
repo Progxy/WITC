@@ -1,4 +1,4 @@
-C-FLAGS = -std=c11 -Wall -Wextra -pedantic
+C-FLAGS = -std=gnu11 -Wall -Wextra -pedantic
 
 all: witc_test test.bin
 

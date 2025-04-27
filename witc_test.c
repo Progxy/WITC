@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define _ENABLE_DEBUG_
+
 #define _SUPPORT_FUNCTIONS_
 #define _SPECIAL_TYPE_SUPPORT_
 #include "./witc.h"
@@ -19,6 +21,8 @@ int main(int argc, char** argv) {
 		return 69;
 	}
 
+	bin_dump(ptr, size);
+
 	printf("\n");
 	printf("\t╔════════════════════════════════════════════════════════════════════════════╗\n");
 	printf("\t║                      🕵️  WITC - What’s In The Code                          ║\n");
@@ -31,7 +35,11 @@ int main(int argc, char** argv) {
 		
 		InsInfo ins_info = {0};
 		int ret = decode_instruction(ptr, size, &ins_info);
-		
+		if (ret < 0) {
+			printf("\t║ %03llu │ 0x%08llX │ %-24s │ %-28s ║\n", j, i, ins_info.byte_ins, "unknown/illegal instruction");
+			break;
+		}	
+
 		printf("\t║ %03llu │ 0x%08llX │ %-24s │ %-28s ║\n", j, i, ins_info.byte_ins, ins_info.ins_str);
 		
 		size -= ret, ptr += ret, i += ret;
