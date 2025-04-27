@@ -63,7 +63,7 @@ static char* str_cpy(char* dest, const char* restrict src) {
 
 static const char hex_chrs[16] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
 
-static void byte_str_into_hex_str(char* str, u8* byte_str, u8 byte_size) {
+static void byte_str_into_hex_str(char* str, const u8* byte_str, u8 byte_size) {
 	for (u8 i = byte_size, j = 0; i > 0; --i, ++j) {
 		str[j++] = hex_chrs[(byte_str[i - 1] >> 4) & 0xF];
 		str[j] = hex_chrs[byte_str[i - 1] & 0xF];

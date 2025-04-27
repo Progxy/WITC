@@ -31,17 +31,22 @@ static u8 decode_instruction(const u8* machine_data, const u64 size, InsInfo* in
 		else opcode = *machine_data++;
 	}
 	
+	if (suffix != 'd') {
+		byte_str_into_hex_str(ins_info -> byte_ins, machine_data - (1 + (ret != -1)), 1);
+		mem_set(ins_info -> byte_ins + 2, ' ', sizeof(char));
+	}
+
 	u8 ins_size = 1;
 	if (ret == 0) ret = simple_ins_match(opcode);
 	
-	for (u64 i = 1; i < size && ret < 0; ++i, ++ins_size) {
+	for (; ins_size < size - (suffix != 'd') && ret < 0; ++ins_size) {
 		opcode = (opcode << 8) | *machine_data++;
 		ret = simple_ins_match(opcode);
 	}
 	
 	if (ret == -1) ret = ARR_SIZE(opcodes_mnemonics) - 1;
 	
-	byte_str_into_hex_str(ins_info -> byte_ins, (u8*) &opcode, ins_size);
+	byte_str_into_hex_str(ins_info -> byte_ins + (suffix != 'd') * 3, (u8*) &opcode, ins_size);
 	str_cpy(ins_info -> ins_str, opcodes_mnemonics[ret]);
 	if (suffix != '\0' && opcodes_mnemonics_ins[ret]) mem_set(ins_info -> ins_str + str_len(ins_info -> ins_str), suffix, sizeof(char));
 	ins_size += suffix != 'd';
