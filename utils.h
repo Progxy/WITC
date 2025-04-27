@@ -40,6 +40,15 @@ static size_t str_len(const char* str) {
     return i;
 }
 
+#define mem_set(ptr, value, size)    mem_set_var(ptr, value, size, sizeof(u8))
+#define mem_set_32(ptr, value, size) mem_set_var(ptr, value, size, sizeof(u32))
+#define mem_set_64(ptr, value, size) mem_set_var(ptr, value, size, sizeof(u64))
+static void mem_set_var(void* ptr, int value, size_t size, size_t val_size) {
+	if (ptr == NULL) return;
+	for (size_t i = 0; i < size; ++i) CAST_PTR(ptr, unsigned char)[i] = CAST_PTR(&value, unsigned char)[i % val_size]; 
+	return;
+}
+
 static void* mem_cpy(void* dest, const void* src, size_t size) {
 	if (dest == NULL || src == NULL) return NULL;
 	for (size_t i = 0; i < size; ++i) CAST_PTR(dest, unsigned char)[i] = CAST_PTR(src, unsigned char)[i];
@@ -55,10 +64,10 @@ static char* str_cpy(char* dest, const char* restrict src) {
 static const char hex_chrs[16] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
 
 static void byte_str_into_hex_str(char* str, u8* byte_str, u8 byte_size) {
-	for (u8 i = 0, j = 0; i < byte_size; ++i, ++j) {
-		str[j++] = hex_chrs[(byte_str[i] >> 4) & 0xF];
-		str[j] = hex_chrs[byte_str[i] & 0xF];
-		if (i < byte_size - 1) str[++j] = ' ';
+	for (u8 i = byte_size, j = 0; i > 0; --i, ++j) {
+		str[j++] = hex_chrs[(byte_str[i - 1] >> 4) & 0xF];
+		str[j] = hex_chrs[byte_str[i - 1] & 0xF];
+		if (i > 1) str[++j] = ' ';
 	}
 	return;
 }
