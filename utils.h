@@ -66,6 +66,19 @@ static void* mem_cpy(void* dest, const void* src, size_t size) {
 	return dest;
 }
 
+static void mem_move(void* dest, const void* src, size_t size) {
+    if (dest == NULL || src == NULL || size == 0) return;
+    
+	u8* temp = (u8*) calloc(size, sizeof(u8));
+	
+	for (size_t i = 0; i < size; ++i) *CAST_PTR(temp + i, u8) = *CAST_PTR(CAST_PTR(src, u8) + i, u8); 
+    for (size_t i = 0; i < size; ++i) *CAST_PTR(CAST_PTR(dest, u8) + i, u8) = *CAST_PTR(temp + i, u8);
+    
+	free(temp);
+    
+    return;
+}
+
 static char* str_cpy(char* dest, const char* restrict src) {
 	if (dest == NULL || src == NULL) return NULL;
 	mem_cpy((void*) dest, (void*) src, str_len(src) + 1);
@@ -99,6 +112,24 @@ static void byte_str_into_hex_val(char* str, const u8* byte_str, u8 byte_size) {
 		str[j++] = hex_chrs[(byte_str[i - 1] >> 4) & 0xF];
 		str[j] = hex_chrs[byte_str[i - 1] & 0xF];
 	}
+	return;
+}
+
+static void byte_str_into_dec_val(char* str, const u8* byte_str, u8 byte_size) {
+	u64 val = 0;
+	for (u8 i = byte_size; i > 0; --i) {
+		val *= 256;
+		val += byte_str[i - 1];
+	}
+	
+	char* const str_base = str;
+	while (val) {
+		mem_move(str_base + 1, str_base, str - str_base);
+		u8 value = val % 10;
+		*str_base = value + '0', str++;
+		val = (val - (val % 10)) / 10;
+	}
+	
 	return;
 }
 

@@ -174,13 +174,19 @@ static const Instruction instructions[] = {
 // ---------------------------------------------------------------
 // TODO: Prettify the following print
 static void bin_dump(u8* bin_data, u64 size) {
-	printf(" -- Bin Dump (%llu bytes) -- \n", size);
-	for (u64 i = 0; i < size; ++i) {
-		if (i % 8 == 0) printf("  ");
-		printf("0x%02X%c", bin_data[i], (i + 1) % 8 ? ' ': '\n');
-		if ((((i + 1) % 8)) && (i == size - 1)) printf("\n");
-	}
-	printf(" -----------------------------\n");
+    printf("\t╔══════════════════════════════════════╗\n");
+    printf("\t║         Bin Dump (%llu bytes)          ║\n", size);
+    printf("\t╠══════════════════════════════════════╣\n");
+    
+    for (u64 i = 0; i < size; ++i) {
+        if (i % 8 == 0) printf("\t║  0x%04llX: ", i);
+        
+        printf("%02X ", bin_data[i]);
+        
+        if ((i + 1) % 8 == 0 || i == size - 1) printf(" %*.s║\n", (int) (i == size - 1 ? 3 * (8 - ((i + 1) % 8) + 1) : 3), " ");
+    }
+    
+    printf("\t╚══════════════════════════════════════╝\n\n");
 	return;
 }
 
@@ -253,16 +259,17 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 
 	// TODO: The following should be put in another function maybe alongside another for SIB-decoding
 	
-	// TODO: The following should be divided in the three forms e.g. : rax if [BIT_64] 'ax' if [BIT_16] else 'eax' if [DEFAULT]
-	const char* regs[8] =  { "rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi" };
-	const char* rms_m[8] =  { "rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi" };
-	
+	const char* regs[3][8] = {
+		{ "ax", "cx", "dx", "bx", "sp", "bp", "si", "di" },
+		{ "eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi" },
+		{ "rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi" }
+	};
+
 	if (ins.expect_modrm) {
 		u8 reg_mask = 0x38;
 		if (rex.r) reg_mask |= 0x40;
 		if (rex.b) reg_mask <<= 1;
 		u8 reg = (*machine_data & reg_mask) >> (3 + rex.b);
-		DEBUG("reg: 0x%X", reg);
 
 		u8 mod_mask = 0xC0;
 		if (rex.b) mod_mask <<= 1;
@@ -284,13 +291,13 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 			int pos = str_len(ins_info -> ins_str);
 			if (pos == MAX_DISASM_INS_LEN) return ins_size;
 			mem_set(ins_info -> ins_str + pos, ' ', sizeof(char));
-			str_cpy(ins_info -> ins_str + pos + 1, rms_m[rm]);
+			str_cpy(ins_info -> ins_str + pos + 1, regs[operand_size][rm]);
 		} else {
 			DEBUG("mod: 0x%X", mod);
 			int pos = str_len(ins_info -> ins_str);
 			if (pos == MAX_DISASM_INS_LEN) return ins_size;
 			str_cpy(ins_info -> ins_str + pos, " [");
-			str_cpy(ins_info -> ins_str + pos + 2, rms_m[rm]);
+			str_cpy(ins_info -> ins_str + pos + 2, regs[operand_size][rm]);
 			
 			if ((mod == 0x01 || mod == 0x02) && rm == 0x05) {
 				char offset = *(++machine_data);
@@ -298,11 +305,7 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 				if (offset < 0) str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), " - ");
 				else mem_set(ins_info -> ins_str + str_len(ins_info -> ins_str), ' ', sizeof(char));
 				offset = ABS(offset);
-				// TODO: Another method should be better than this shite
-				char copy[MAX_DISASM_INS_LEN] = {0};
-				snprintf(copy, MAX_DISASM_INS_LEN, "%s%u", ins_info -> ins_str, offset);
-				str_cpy(ins_info -> ins_str, copy);
-				// --------------------------------------
+				byte_str_into_dec_val(ins_info -> ins_str + str_len(ins_info -> ins_str), (u8*) &offset, 1);
 				mem_set(ins_info -> byte_ins + str_len(ins_info -> byte_ins), ' ', sizeof(char));
 				byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), machine_data, 1);
 			}
@@ -322,7 +325,7 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 			int pos = str_len(ins_info -> ins_str);
 			if (pos == MAX_DISASM_INS_LEN) return ins_size;
 			str_cpy(ins_info -> ins_str + pos, ", ");
-			str_cpy(ins_info -> ins_str + pos + 2, regs[reg]);
+			str_cpy(ins_info -> ins_str + pos + 2, regs[operand_size][reg]);
 		}
 
 	 } else if (ins.embedded_reg) {
@@ -330,7 +333,7 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 		int pos = str_len(ins_info -> ins_str);
 		if (pos == MAX_DISASM_INS_LEN) return ins_size;
 		mem_set(ins_info -> ins_str + pos, ' ', sizeof(char));
-		str_cpy(ins_info -> ins_str + pos + 1, regs[reg]);
+		str_cpy(ins_info -> ins_str + pos + 1, regs[operand_size][reg]);
 	 } else if (ins.first_operand != NONE) {
 		OperandType first_operand = MIN(ins.first_operand + (ins.dynamic_operands_size * operand_effective_size_increment[operand_size]), ins.max_first_operand_size);
 		if (IS_IMM(first_operand)) {
