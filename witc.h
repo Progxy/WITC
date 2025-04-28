@@ -9,20 +9,23 @@ typedef enum OperandType { NONE = 0, REGISTER, REG_8, REG_16, REG_32, REG_64, ME
 #define IS_REG(val) ((val) >= REG_8 && (val) <= REG_64)
 #define IS_MEM(val) ((val) >= MEM_8 && (val) <= MEM_64)
 
+// TODO: Instead of DEFAULT should put 'BIT_32' for consistency
 typedef enum OperandSize { BIT_16, DEFAULT, BIT_64 } OperandSize;
 const int operand_effective_size_increment[] = { -1, 0, 1};
 const char suffixes[] = { 'w', 'd', 'q' };
 
 typedef struct PACKED_STRUCT Rex {
-	u8 res: 4;
-	u8 w: 1;
-	u8 r: 1;
-	u8 x: 1;
 	u8 b: 1;
+	u8 x: 1;
+	u8 r: 1;
+	u8 w: 1;
+	u8 res: 4;
 } Rex;
 
 typedef struct Instruction {
 	u64 opcode;
+	bool use_opcode_reg_dist;
+	u8 opcode_reg;
 	char* mnemonic;
 	bool expect_modrm;
 	bool dynamic_operands_size;
@@ -119,6 +122,8 @@ static const Instruction instructions[] = {
 	{
 		.opcode = 0x83,
 		.mnemonic = "sub",
+		.use_opcode_reg_dist = TRUE,
+		.opcode_reg = 0x05,
 		.expect_modrm = TRUE,
 		.dynamic_operands_size = TRUE,
 		.default_operand_size = DEFAULT,
@@ -126,7 +131,44 @@ static const Instruction instructions[] = {
 		.max_first_operand_size = REG_64,
 		.second_operand = IMM_8,
 		.max_sec_operand_size = IMM_8
-	}
+	},
+	{
+		.opcode = 0x83,
+		.mnemonic = "cmp",
+		.use_opcode_reg_dist = TRUE,
+		.opcode_reg = 0x07,
+		.expect_modrm = TRUE,
+		.dynamic_operands_size = TRUE,
+		.default_operand_size = DEFAULT,
+		.first_operand = REG_32,
+		.max_first_operand_size = REG_64,
+		.second_operand = IMM_8,
+		.max_sec_operand_size = IMM_8
+	},
+	// TODO: The following should be better determined: "Many disassemblers prefer je after cmp instructions, and jz after operations like test"
+	{
+		.opcode = 0x74,
+		.mnemonic = "je",
+		.expect_modrm = FALSE,
+		.dynamic_operands_size = FALSE,
+		.default_operand_size = DEFAULT,
+		.first_operand = IMM_8,
+		.max_first_operand_size = IMM_8,
+		.second_operand = NONE,
+		.max_sec_operand_size = NONE
+	},
+	// TODO: The following should be better determined: "Many disassemblers prefer je after cmp instructions, and jz after operations like test"
+	{
+		.opcode = 0x75,
+		.mnemonic = "jne",
+		.expect_modrm = FALSE,
+		.dynamic_operands_size = FALSE,
+		.default_operand_size = DEFAULT,
+		.first_operand = IMM_8,
+		.max_first_operand_size = IMM_8,
+		.second_operand = NONE,
+		.max_sec_operand_size = NONE
+	},
 };
 
 // ---------------------------------------------------------------
@@ -142,59 +184,67 @@ static void bin_dump(u8* bin_data, u64 size) {
 	return;
 }
 
-static inline int simple_ins_match(const u64 opcode) {
-	for (u64 i = 0; i < ARR_SIZE(instructions); ++i) {
-		if (opcode == instructions[i].opcode) return i;
-		else if (instructions[i].embedded_reg && (opcode >= instructions[i].opcode && opcode <= instructions[i].opcode + 0x07)) return i;
+static inline int simple_ins_match(const u8* machine_data, const u64 size, u8* match_ins_size) {
+	u64 opcode = *machine_data++;
+	for (; *match_ins_size <= size; ++(*match_ins_size)) {
+		for (u64 i = 0; i < ARR_SIZE(instructions); ++i) {
+			if (opcode == instructions[i].opcode) {
+				if (instructions[i].use_opcode_reg_dist && instructions[i].opcode_reg != ((*machine_data & 0x38) >> 3)) continue;
+				return i;
+			// TODO: Not considering the possibility of a range opcode matched with also opcode_reg distinguisher
+			} else if (instructions[i].embedded_reg && (opcode >= instructions[i].opcode && opcode <= instructions[i].opcode + 0x07)) return i;
+		}
+		opcode = (opcode << 8) | *machine_data++;
 	}
 	return -1;
 }
 
 static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* ins_info) {
-	u64 opcode = *machine_data++;
-	u8 ins_size = 1;
+	u8 prefix = *machine_data;
+	u8 ins_size = 0;
 
 	// TODO: The following should be inserted in a function factoring out the latter if statement
 	// Instruction defaults to 32-bits, so this suffix is always present
 	Rex rex = {0};
 	OperandSize operand_size = DEFAULT;
-	if (opcode >= 0x40 && opcode <= 0x4F) {
-		rex = *((Rex*) &opcode);
+	if (prefix >= 0x40 && prefix <= 0x4F) {
+		rex = *((Rex*) (&prefix));
 		operand_size = BIT_64;
 		DEBUG("Rex: { w: %u, r: %u, x: %u, b: %u}", rex.w, rex.r, rex.x, rex.b);
 		if (ins_size >= size) return -1;
-		opcode = *machine_data++, ins_size++;
-	} else if (opcode == 0x66) {
+		machine_data++, ins_size++;
+	} else if (prefix == 0x66) {
 		DEBUG("66h prefix found");
 		operand_size = BIT_16;
 		if (ins_size >= size) return -1;
-		opcode = *machine_data++, ins_size++;
+		machine_data++, ins_size++;
 	}
 	
 	if (operand_size != DEFAULT) {
-		byte_str_into_hex_str(ins_info -> byte_ins, machine_data - 2, 1);
+		byte_str_into_hex_str(ins_info -> byte_ins, machine_data - 1, 1);
 		// TODO: Should most probably introduce an append_str function
 		mem_set(ins_info -> byte_ins + 2, ' ', sizeof(char));
 	}
 
 	// TODO: The following should be better factored inside the same ins_matching function: which is too simple, and does not take into account 
 	// the single instruction multi functionality like the "finit = wait + fninit" case
-	int ret = simple_ins_match(opcode);
-	for (; ins_size < size && ret < 0; ++ins_size) {
-		opcode = (opcode << 8) | *machine_data++;
-		ret = simple_ins_match(opcode);
-	}
+	u8 match_ins_size = 1;
+	int ret = simple_ins_match(machine_data, size - ins_size, &match_ins_size);
 	
+	machine_data += match_ins_size;
+
 	if (ret < 0) {
-		byte_str_into_hex_str(ins_info -> byte_ins, (u8*) machine_data - ins_size, MIN(8, ins_size));
+		byte_str_into_hex_str(ins_info -> byte_ins, (u8*) machine_data - match_ins_size, MIN(8, match_ins_size));
 		return ret;
 	}
-
+	
+	ins_size += match_ins_size;
+	
 	// TODO: The following copy could be used to be customized in this situation instead of performing the hack below, for more consistency (like the calc of second_operand size)
 	const Instruction ins = instructions[ret];
 
 	// TODO: Should most probably introduce an append_str function
-	byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), (u8*) &opcode, ins_size - (operand_size != DEFAULT));
+	byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), (u8*) machine_data - match_ins_size, match_ins_size);
 	str_cpy(ins_info -> ins_str, ins.mnemonic);
 	if (ins.dynamic_operands_size) {
 		if (operand_size == DEFAULT) operand_size = ins.default_operand_size;
@@ -202,6 +252,8 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 	}
 
 	// TODO: The following should be put in another function maybe alongside another for SIB-decoding
+	
+	// TODO: The following should be divided in the three forms e.g. : rax if [BIT_64] 'ax' if [BIT_16] else 'eax' if [DEFAULT]
 	const char* regs[8] =  { "rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi" };
 	const char* rms_m[8] =  { "rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi" };
 	
@@ -210,12 +262,12 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 		if (rex.r) reg_mask |= 0x40;
 		if (rex.b) reg_mask <<= 1;
 		u8 reg = (*machine_data & reg_mask) >> (3 + rex.b);
-		
+		DEBUG("reg: 0x%X", reg);
+
 		u8 mod_mask = 0xC0;
 		if (rex.b) mod_mask <<= 1;
 		if (rex.r) mod_mask <<= 1;
 		u8 mod = (*machine_data & mod_mask) >> (6 + rex.r + rex.b);
-		DEBUG("mod: 0x%X", mod);
 
 		u8 rm_mask = 0x07;
 		if (rex.b) rm_mask |= 0x08;
@@ -233,12 +285,29 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 			if (pos == MAX_DISASM_INS_LEN) return ins_size;
 			mem_set(ins_info -> ins_str + pos, ' ', sizeof(char));
 			str_cpy(ins_info -> ins_str + pos + 1, rms_m[rm]);
-		} else { //if (mod == 0x) {
+		} else {
 			DEBUG("mod: 0x%X", mod);
-			/* int pos = str_len(ins_info -> ins_str); */
-			/* if (pos == MAX_DISASM_INS_LEN) return ins_size; */
-			/* mem_set(ins_info -> ins_str + pos, ' ', sizeof(char)); */
-			/* str_cpy(ins_info -> ins_str + pos + 1, rms_m[rm]); */
+			int pos = str_len(ins_info -> ins_str);
+			if (pos == MAX_DISASM_INS_LEN) return ins_size;
+			str_cpy(ins_info -> ins_str + pos, " [");
+			str_cpy(ins_info -> ins_str + pos + 2, rms_m[rm]);
+			
+			if ((mod == 0x01 || mod == 0x02) && rm == 0x05) {
+				char offset = *(++machine_data);
+			   	ins_size++;
+				if (offset < 0) str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), " - ");
+				else mem_set(ins_info -> ins_str + str_len(ins_info -> ins_str), ' ', sizeof(char));
+				offset = ABS(offset);
+				// TODO: Another method should be better than this shite
+				char copy[MAX_DISASM_INS_LEN] = {0};
+				snprintf(copy, MAX_DISASM_INS_LEN, "%s%u", ins_info -> ins_str, offset);
+				str_cpy(ins_info -> ins_str, copy);
+				// --------------------------------------
+				mem_set(ins_info -> byte_ins + str_len(ins_info -> byte_ins), ' ', sizeof(char));
+				byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), machine_data, 1);
+			}
+			
+			mem_set(ins_info -> ins_str + str_len(ins_info -> ins_str), ']', sizeof(char));
 		}
 
 		OperandType second_operand = MIN(ins.second_operand + (ins.dynamic_operands_size * operand_effective_size_increment[operand_size]), ins.max_sec_operand_size);
@@ -257,11 +326,21 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 		}
 
 	 } else if (ins.embedded_reg) {
-		u8 reg = opcode & 0x07;
+		u8 reg = *(machine_data - 1) & 0x07;
 		int pos = str_len(ins_info -> ins_str);
 		if (pos == MAX_DISASM_INS_LEN) return ins_size;
 		mem_set(ins_info -> ins_str + pos, ' ', sizeof(char));
 		str_cpy(ins_info -> ins_str + pos + 1, regs[reg]);
+	 } else if (ins.first_operand != NONE) {
+		OperandType first_operand = MIN(ins.first_operand + (ins.dynamic_operands_size * operand_effective_size_increment[operand_size]), ins.max_first_operand_size);
+		if (IS_IMM(first_operand)) {
+			u8 imm_size = 1U << (first_operand - IMM_8);
+			mem_set(ins_info -> ins_str + str_len(ins_info -> ins_str), ' ', sizeof(char));
+			byte_str_into_hex_val(ins_info -> ins_str + str_len(ins_info -> ins_str), machine_data, imm_size);
+			mem_set(ins_info -> byte_ins + str_len(ins_info -> byte_ins), ' ', sizeof(char));
+			byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), machine_data, imm_size);
+			ins_size += imm_size;
+		} 	
 	 }
 
 	return ins_size;

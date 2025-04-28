@@ -33,10 +33,10 @@ typedef struct InsInfo {
 
 #ifdef _SUPPORT_FUNCTIONS_
 
+#define CAST_PTR(ptr, type) ((type*) (ptr))
 #define MAX(a, b) ((a) >= (b) ? (a) : (b)) 
 #define MIN(a, b) ((a) <= (b) ? (a) : (b)) 
-
-#define CAST_PTR(ptr, type) ((type*) (ptr))
+#define ABS(a)    ((a) < 0 ? -(a) : (a))
 
 #ifdef _ENABLE_DEBUG_
 	#define DEBUG(fmt, ...)  printf("\033[38;5;214m[" __FILE__ "::%u]\033[35m DEBUG: \033[0m" fmt "\n", __LINE__, ##__VA_ARGS__)
