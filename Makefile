@@ -11,6 +11,11 @@ test.bin: test.asm
 test: witc_test test.bin
 	./witc_test test.bin
 
+# TODO: Add valgrind flags
+# VALGRIND-FLAGS = 
+mem-test: witc_test test.bin
+	valgrind ./witc_test test.bin
+
 clean: witc_test test.bin
 	rm -rf witc_test test.bin
 

@@ -9,15 +9,29 @@ typedef enum OperandType { NONE = 0, REGISTER, REG_8, REG_16, REG_32, REG_64, ME
 #define IS_REG(val) ((val) >= REG_8 && (val) <= REG_64)
 #define IS_MEM(val) ((val) >= MEM_8 && (val) <= MEM_64)
 
+typedef enum OperandSize { BIT_16, DEFAULT, BIT_64 } OperandSize;
+const int operand_effective_size_increment[] = { -1, 0, 1};
+const char suffixes[] = { 'w', 'd', 'q' };
+
+typedef struct PACKED_STRUCT Rex {
+	u8 res: 4;
+	u8 w: 1;
+	u8 r: 1;
+	u8 x: 1;
+	u8 b: 1;
+} Rex;
+
 typedef struct Instruction {
 	u64 opcode;
 	char* mnemonic;
 	bool expect_modrm;
 	bool dynamic_operands_size;
+	OperandSize default_operand_size;
 	OperandType first_operand;
 	OperandType max_first_operand_size;
 	OperandType second_operand;
 	OperandType max_sec_operand_size;
+	bool embedded_reg;
 } Instruction;
 
 static const Instruction instructions[] = {
@@ -66,6 +80,7 @@ static const Instruction instructions[] = {
 		.mnemonic = "iret",
 		.expect_modrm = FALSE,
 		.dynamic_operands_size = TRUE,
+		.default_operand_size = DEFAULT,
 		.first_operand = NONE,
 		.second_operand = NONE
 	},
@@ -74,6 +89,7 @@ static const Instruction instructions[] = {
 		.mnemonic = "mov",
 		.expect_modrm = TRUE,
 		.dynamic_operands_size = TRUE,
+		.default_operand_size = DEFAULT,
 		.first_operand = REG_32,
 		.max_first_operand_size = REG_64,
 		.second_operand = IMM_32,
@@ -84,26 +100,37 @@ static const Instruction instructions[] = {
 		.mnemonic = "mov",
 		.expect_modrm = TRUE,
 		.dynamic_operands_size = TRUE,
+		.default_operand_size = DEFAULT,
 		.first_operand = REG_32,
 		.max_first_operand_size = REG_64,
 		.second_operand = REG_32,
 		.max_sec_operand_size = REG_64
+	},
+	{
+		.opcode = 0x50,
+		.mnemonic = "push",
+		.expect_modrm = FALSE,
+		.dynamic_operands_size = TRUE,
+		.default_operand_size = BIT_64,
+		.first_operand = NONE,
+		.second_operand = NONE,
+		.embedded_reg = TRUE
+	},
+	{
+		.opcode = 0x83,
+		.mnemonic = "sub",
+		.expect_modrm = TRUE,
+		.dynamic_operands_size = TRUE,
+		.default_operand_size = DEFAULT,
+		.first_operand = REG_32,
+		.max_first_operand_size = REG_64,
+		.second_operand = IMM_8,
+		.max_sec_operand_size = IMM_8
 	}
 };
 
-typedef enum OperandSize { BIT_16, DEFAULT, BIT_64 } OperandSize;
-const int operand_effective_size_increment[] = { -1, 0, 1};
-const char suffixes[] = { 'w', 'd', 'q' };
-
-typedef struct PACKED_STRUCT Rex {
-	u8 res: 4;
-	u8 w: 1;
-	u8 r: 1;
-	u8 x: 1;
-	u8 b: 1;
-} Rex;
-
 // ---------------------------------------------------------------
+// TODO: Prettify the following print
 static void bin_dump(u8* bin_data, u64 size) {
 	printf(" -- Bin Dump (%llu bytes) -- \n", size);
 	for (u64 i = 0; i < size; ++i) {
@@ -118,6 +145,7 @@ static void bin_dump(u8* bin_data, u64 size) {
 static inline int simple_ins_match(const u64 opcode) {
 	for (u64 i = 0; i < ARR_SIZE(instructions); ++i) {
 		if (opcode == instructions[i].opcode) return i;
+		else if (instructions[i].embedded_reg && (opcode >= instructions[i].opcode && opcode <= instructions[i].opcode + 0x07)) return i;
 	}
 	return -1;
 }
@@ -144,7 +172,7 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 	}
 	
 	if (operand_size != DEFAULT) {
-		byte_str_into_hex_str(ins_info -> byte_ins, machine_data - 2, 1, FALSE);
+		byte_str_into_hex_str(ins_info -> byte_ins, machine_data - 2, 1);
 		// TODO: Should most probably introduce an append_str function
 		mem_set(ins_info -> byte_ins + 2, ' ', sizeof(char));
 	}
@@ -158,7 +186,7 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 	}
 	
 	if (ret < 0) {
-		byte_str_into_hex_str(ins_info -> byte_ins, (u8*) machine_data - ins_size, MIN(8, ins_size), FALSE);
+		byte_str_into_hex_str(ins_info -> byte_ins, (u8*) machine_data - ins_size, MIN(8, ins_size));
 		return ret;
 	}
 
@@ -166,10 +194,13 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 	const Instruction ins = instructions[ret];
 
 	// TODO: Should most probably introduce an append_str function
-	byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), (u8*) &opcode, ins_size, FALSE);
+	byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), (u8*) &opcode, ins_size - (operand_size != DEFAULT));
 	str_cpy(ins_info -> ins_str, ins.mnemonic);
-	if (ins.dynamic_operands_size) mem_set(ins_info -> ins_str + str_len(ins_info -> ins_str), suffixes[operand_size], sizeof(char));
-	
+	if (ins.dynamic_operands_size) {
+		if (operand_size == DEFAULT) operand_size = ins.default_operand_size;
+		mem_set(ins_info -> ins_str + str_len(ins_info -> ins_str), suffixes[operand_size], sizeof(char));
+	}
+
 	// TODO: The following should be put in another function maybe alongside another for SIB-decoding
 	const char* regs[8] =  { "rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi" };
 	const char* rms_m[8] =  { "rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi" };
@@ -180,11 +211,6 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 		if (rex.b) reg_mask <<= 1;
 		u8 reg = (*machine_data & reg_mask) >> (3 + rex.b);
 		
-		int pos = str_len(ins_info -> ins_str);
-		if (pos == MAX_DISASM_INS_LEN) return ins_size;
-		mem_set(ins_info -> ins_str + pos, ' ', sizeof(char));
-		str_cpy(ins_info -> ins_str + pos + 1, regs[reg]);
-
 		u8 mod_mask = 0xC0;
 		if (rex.b) mod_mask <<= 1;
 		if (rex.r) mod_mask <<= 1;
@@ -195,22 +221,48 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 		if (rex.b) rm_mask |= 0x08;
 		u8 rm = *machine_data & rm_mask;
 		
+		mem_set(ins_info -> byte_ins + str_len(ins_info -> byte_ins), ' ', sizeof(char));
+		byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), machine_data, 1);
+		
 		// Increase size as we've read the ModRM byte
 		ins_size++;
 		
+		// TODO: The order and type of the operands should be better taken into consideration
+		if (mod == 0x03) {
+			int pos = str_len(ins_info -> ins_str);
+			if (pos == MAX_DISASM_INS_LEN) return ins_size;
+			mem_set(ins_info -> ins_str + pos, ' ', sizeof(char));
+			str_cpy(ins_info -> ins_str + pos + 1, rms_m[rm]);
+		} else { //if (mod == 0x) {
+			DEBUG("mod: 0x%X", mod);
+			/* int pos = str_len(ins_info -> ins_str); */
+			/* if (pos == MAX_DISASM_INS_LEN) return ins_size; */
+			/* mem_set(ins_info -> ins_str + pos, ' ', sizeof(char)); */
+			/* str_cpy(ins_info -> ins_str + pos + 1, rms_m[rm]); */
+		}
+
 		OperandType second_operand = MIN(ins.second_operand + (ins.dynamic_operands_size * operand_effective_size_increment[operand_size]), ins.max_sec_operand_size);
 		if (IS_IMM(second_operand)) {
 			u8 imm_size = 1U << (second_operand - IMM_8);
 			str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), ", ");
-			byte_str_into_hex_str(ins_info -> ins_str + str_len(ins_info -> ins_str), ++machine_data, imm_size, TRUE);
+			byte_str_into_hex_val(ins_info -> ins_str + str_len(ins_info -> ins_str), ++machine_data, imm_size);
+			mem_set(ins_info -> byte_ins + str_len(ins_info -> byte_ins), ' ', sizeof(char));
+			byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), machine_data, imm_size);
 			ins_size += imm_size;
-		} else if (mod == 0x03 && (IS_REG(second_operand) || IS_MEM(second_operand))) {
+		} else if ((IS_REG(second_operand) || IS_MEM(second_operand))) {	
 			int pos = str_len(ins_info -> ins_str);
 			if (pos == MAX_DISASM_INS_LEN) return ins_size;
 			str_cpy(ins_info -> ins_str + pos, ", ");
-			str_cpy(ins_info -> ins_str + pos + 2, rms_m[rm]);
+			str_cpy(ins_info -> ins_str + pos + 2, regs[reg]);
 		}
-	}
+
+	 } else if (ins.embedded_reg) {
+		u8 reg = opcode & 0x07;
+		int pos = str_len(ins_info -> ins_str);
+		if (pos == MAX_DISASM_INS_LEN) return ins_size;
+		mem_set(ins_info -> ins_str + pos, ' ', sizeof(char));
+		str_cpy(ins_info -> ins_str + pos + 1, regs[reg]);
+	 }
 
 	return ins_size;
 }

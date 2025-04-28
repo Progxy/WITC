@@ -84,12 +84,20 @@ UNUSED_FUNCTION static int str_tok(const char* str, const char* delim) {
 
 static const char hex_chrs[16] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
 
-static void byte_str_into_hex_str(char* str, const u8* byte_str, u8 byte_size, bool use_prefix) {
-	if(use_prefix) str[0] = '0', str[1] = 'x', str += 2;
+static void byte_str_into_hex_str(char* str, const u8* byte_str, u8 byte_size) {
+	for (u8 i = 0, j = 0; i < byte_size; ++i, ++j) {
+		str[j++] = hex_chrs[(byte_str[i] >> 4) & 0xF];
+		str[j] = hex_chrs[byte_str[i] & 0xF];
+		if (i < byte_size - 1) str[++j] = ' ';
+	}
+	return;
+}
+
+static void byte_str_into_hex_val(char* str, const u8* byte_str, u8 byte_size) {
+	str[0] = '0', str[1] = 'x', str += 2;
 	for (u8 i = byte_size, j = 0; i > 0; --i, ++j) {
 		str[j++] = hex_chrs[(byte_str[i - 1] >> 4) & 0xF];
 		str[j] = hex_chrs[byte_str[i - 1] & 0xF];
-		if (!use_prefix && i > 1) str[++j] = ' ';
 	}
 	return;
 }

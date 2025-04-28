@@ -3,7 +3,7 @@ use64
 _test:
 	push rbp
 	mov	 rbp, rsp
-	sub  rsp, $40
+	sub  rsp, 40
 	mov qword [rbp - 24], rdi
 	mov qword [rbp - 32], rsi
 	mov dword [rbp - 36], edx
