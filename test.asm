@@ -15,6 +15,7 @@ efi_mem_cpy:
 .L2:
 	mov	eax, 0	; _8,
 	jmp	.L4	;
+
 .L3:
 	mov	rax, qword [rbp-24]	; tmp104, dest
 	mov	qword [rbp-8], rax	; dest_data, tmp104

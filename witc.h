@@ -110,6 +110,51 @@ static const Instruction instructions[] = {
 		.max_sec_operand_size = REG_64
 	},
 	{
+		.opcode = 0x8B,
+		.mnemonic = "mov",
+		.expect_modrm = TRUE,
+		.dynamic_operands_size = TRUE,
+		.default_operand_size = DEFAULT,
+		.first_operand = REG_32,
+		.max_first_operand_size = REG_64,
+		.second_operand = REG_32,
+		.max_sec_operand_size = REG_64
+	},
+	{
+		.opcode = 0xB8,
+		.mnemonic = "mov",
+		.expect_modrm = FALSE,
+		.dynamic_operands_size = TRUE,
+		.default_operand_size = DEFAULT,
+		.first_operand = REG_32,
+		.max_first_operand_size = REG_64,
+		.second_operand = IMM_32,
+		.max_sec_operand_size = IMM_64,
+		.embedded_reg = TRUE
+	},
+	{
+		.opcode = 0x8D,
+		.mnemonic = "lea",
+		.expect_modrm = TRUE,
+		.dynamic_operands_size = TRUE,
+		.default_operand_size = DEFAULT,
+		.first_operand = REG_32,
+		.max_first_operand_size = REG_64,
+		.second_operand = MEM_32,
+		.max_sec_operand_size = MEM_64
+	},
+	{
+		.opcode = 0x0FB6,
+		.mnemonic = "movx",
+		.expect_modrm = TRUE,
+		.dynamic_operands_size = TRUE,
+		.default_operand_size = DEFAULT,
+		.first_operand = REG_32,
+		.max_first_operand_size = REG_64,
+		.second_operand = REG_8,
+		.max_sec_operand_size = REG_8
+	},
+	{
 		.opcode = 0x50,
 		.mnemonic = "push",
 		.expect_modrm = FALSE,
@@ -169,6 +214,17 @@ static const Instruction instructions[] = {
 		.second_operand = NONE,
 		.max_sec_operand_size = NONE
 	},
+	{
+		.opcode = 0xEB,
+		.mnemonic = "jmp",
+		.expect_modrm = FALSE,
+		.dynamic_operands_size = FALSE,
+		.default_operand_size = DEFAULT,
+		.first_operand = IMM_8,
+		.max_first_operand_size = IMM_8,
+		.second_operand = NONE,
+		.max_sec_operand_size = NONE
+	}
 };
 
 // ---------------------------------------------------------------
@@ -190,7 +246,7 @@ static void bin_dump(u8* bin_data, u64 size) {
 	return;
 }
 
-static inline int simple_ins_match(const u8* machine_data, const u64 size, u8* match_ins_size) {
+static inline int simple_ins_match(const u8* machine_data, const u64 size, u64* match_ins_size) {
 	u64 opcode = *machine_data++;
 	for (; *match_ins_size <= size; ++(*match_ins_size)) {
 		for (u64 i = 0; i < ARR_SIZE(instructions); ++i) {
@@ -207,7 +263,7 @@ static inline int simple_ins_match(const u8* machine_data, const u64 size, u8* m
 
 static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* ins_info) {
 	u8 prefix = *machine_data;
-	u8 ins_size = 0;
+	u64 ins_size = 0;
 
 	// TODO: The following should be inserted in a function factoring out the latter if statement
 	// Instruction defaults to 32-bits, so this suffix is always present
@@ -234,7 +290,7 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 
 	// TODO: The following should be better factored inside the same ins_matching function: which is too simple, and does not take into account 
 	// the single instruction multi functionality like the "finit = wait + fninit" case
-	u8 match_ins_size = 1;
+	u64 match_ins_size = 1;
 	int ret = simple_ins_match(machine_data, size - ins_size, &match_ins_size);
 	
 	machine_data += match_ins_size;
@@ -303,7 +359,28 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 				char offset = *(++machine_data);
 			   	ins_size++;
 				if (offset < 0) str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), " - ");
-				else mem_set(ins_info -> ins_str + str_len(ins_info -> ins_str), ' ', sizeof(char));
+				else str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), " + ");
+				offset = ABS(offset);
+				byte_str_into_dec_val(ins_info -> ins_str + str_len(ins_info -> ins_str), (u8*) &offset, 1);
+				mem_set(ins_info -> byte_ins + str_len(ins_info -> byte_ins), ' ', sizeof(char));
+				byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), machine_data, 1);
+			} else {
+				machine_data++, ins_size++;
+				u16 sib = *machine_data;
+				
+				u8 base = sib & (rex.b ? 0x07 : 0x0F);
+				
+				u8 index_mask = 0x38;
+				if (rex.x) index_mask |= 0x40;
+				if (rex.b) index_mask <<= 1;
+				u8 index = (sib & index_mask) >> (3 + rex.b);
+				
+				u8 scale = (sib & (0xC0 << (rex.x + rex.b))) >> (6 + rex.x + rex.b);
+				scale = 1 << scale;
+
+				char offset = scale * index + base;
+				if (offset < 0) str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), " - ");
+				else str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), " + ");
 				offset = ABS(offset);
 				byte_str_into_dec_val(ins_info -> ins_str + str_len(ins_info -> ins_str), (u8*) &offset, 1);
 				mem_set(ins_info -> byte_ins + str_len(ins_info -> byte_ins), ' ', sizeof(char));
@@ -334,11 +411,25 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 		if (pos == MAX_DISASM_INS_LEN) return ins_size;
 		mem_set(ins_info -> ins_str + pos, ' ', sizeof(char));
 		str_cpy(ins_info -> ins_str + pos + 1, regs[operand_size][reg]);
-	 } else if (ins.first_operand != NONE) {
+	 } 
+	 
+	if (!ins.expect_modrm && ins.first_operand != NONE) {
 		OperandType first_operand = MIN(ins.first_operand + (ins.dynamic_operands_size * operand_effective_size_increment[operand_size]), ins.max_first_operand_size);
 		if (IS_IMM(first_operand)) {
 			u8 imm_size = 1U << (first_operand - IMM_8);
 			mem_set(ins_info -> ins_str + str_len(ins_info -> ins_str), ' ', sizeof(char));
+			byte_str_into_hex_val(ins_info -> ins_str + str_len(ins_info -> ins_str), machine_data, imm_size);
+			mem_set(ins_info -> byte_ins + str_len(ins_info -> byte_ins), ' ', sizeof(char));
+			byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), machine_data, imm_size);
+			ins_size += imm_size;
+		} 	
+	}
+	
+	if (!ins.expect_modrm && ins.second_operand != NONE) {
+		OperandType second_operand = MIN(ins.second_operand + (ins.dynamic_operands_size * operand_effective_size_increment[operand_size]), ins.max_sec_operand_size);
+		if (IS_IMM(second_operand)) {
+			u8 imm_size = 1U << (second_operand - IMM_8);
+			str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), ", ");
 			byte_str_into_hex_val(ins_info -> ins_str + str_len(ins_info -> ins_str), machine_data, imm_size);
 			mem_set(ins_info -> byte_ins + str_len(ins_info -> byte_ins), ' ', sizeof(char));
 			byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), machine_data, imm_size);
