@@ -3,11 +3,12 @@
 
 #include "./utils.h"
 
-typedef enum OperandType { NONE = 0, REG_8, REG_16, REG_32, REG_64, MEM_8, MEM_16, MEM_32, MEM_64, IMM_8, IMM_16, IMM_32, IMM_64 } OperandType;
+typedef enum OperandType { NONE = 0, DEFAULT_REG, REG_8, REG_16, REG_32, REG_64, MEM_8, MEM_16, MEM_32, MEM_64, REG_MEM_8, REG_MEM_16, REG_MEM_32, REG_MEM_64, IMM_8, IMM_16, IMM_32, IMM_64 } OperandType;
 
-#define IS_IMM(val) ((val) >= IMM_8 && (val) <= IMM_64)
-#define IS_REG(val) ((val) >= REG_8 && (val) <= REG_64)
-#define IS_MEM(val) ((val) >= MEM_8 && (val) <= MEM_64)
+#define IS_IMM(val)     ((val) >= IMM_8     && (val) <= IMM_64)
+#define IS_REG(val)     ((val) >= REG_8     && (val) <= REG_64)
+#define IS_MEM(val)     ((val) >= MEM_8     && (val) <= MEM_64)
+#define IS_REG_MEM(val) ((val) >= REG_MEM_8 && (val) <= REG_MEM_64)
 
 // TODO: Instead of DEFAULT should put 'BIT_32' for consistency
 typedef enum OperandSize { BIT_16 = 0, DEFAULT, BIT_64, BIT_8 } OperandSize;
@@ -34,9 +35,11 @@ typedef struct Instruction {
 	OperandType max_first_operand_size;
 	OperandType second_operand;
 	OperandType max_sec_operand_size;
+	char* default_reg;
 	bool embedded_reg;
 } Instruction;
 
+// TODO: Find a better ordering for the instructions: like alphabetical?
 static const Instruction instructions[] = {
 	{
 		.opcode = 0x9B,
@@ -79,6 +82,30 @@ static const Instruction instructions[] = {
 		.second_operand = NONE
 	},
 	{
+		.opcode = 0xC9,
+		.mnemonic = "leave",
+		.expect_modrm = FALSE,
+		.dynamic_operands_size = FALSE,
+		.first_operand = NONE,
+		.second_operand = NONE
+	},
+	{
+		.opcode = 0xC3,
+		.mnemonic = "ret",
+		.expect_modrm = FALSE,
+		.dynamic_operands_size = FALSE,
+		.first_operand = NONE,
+		.second_operand = NONE
+	},
+	{
+		.opcode = 0x90,
+		.mnemonic = "nop",
+		.expect_modrm = FALSE,
+		.dynamic_operands_size = FALSE,
+		.first_operand = NONE,
+		.second_operand = NONE
+	},
+	{
 		.opcode = 0xCF,
 		.mnemonic = "iret",
 		.expect_modrm = FALSE,
@@ -88,13 +115,24 @@ static const Instruction instructions[] = {
 		.second_operand = NONE
 	},
 	{
+		.opcode = 0xE7,
+		.mnemonic = "out",
+		.expect_modrm = FALSE,
+		.default_operand_size = DEFAULT,
+		.first_operand = IMM_8,
+		.max_first_operand_size = IMM_8,
+		.second_operand = DEFAULT_REG,
+		.max_sec_operand_size= DEFAULT_REG,
+		.default_reg = "rax"
+	},
+	{
 		.opcode = 0xC7,
 		.mnemonic = "mov",
 		.expect_modrm = TRUE,
 		.dynamic_operands_size = TRUE,
 		.default_operand_size = DEFAULT,
-		.first_operand = REG_32,
-		.max_first_operand_size = REG_64,
+		.first_operand = REG_MEM_32,
+		.max_first_operand_size = REG_MEM_64,
 		.second_operand = IMM_32,
 		.max_sec_operand_size = IMM_32
 	},
@@ -104,8 +142,8 @@ static const Instruction instructions[] = {
 		.expect_modrm = TRUE,
 		.dynamic_operands_size = TRUE,
 		.default_operand_size = BIT_8,
-		.first_operand = REG_8,
-		.max_first_operand_size = REG_8,
+		.first_operand = REG_MEM_8,
+		.max_first_operand_size = REG_MEM_8,
 		.second_operand = REG_8,
 		.max_sec_operand_size = REG_8
 	},
@@ -115,8 +153,8 @@ static const Instruction instructions[] = {
 		.expect_modrm = TRUE,
 		.dynamic_operands_size = TRUE,
 		.default_operand_size = DEFAULT,
-		.first_operand = REG_32,
-		.max_first_operand_size = REG_64,
+		.first_operand = REG_MEM_32,
+		.max_first_operand_size = REG_MEM_64,
 		.second_operand = REG_32,
 		.max_sec_operand_size = REG_64
 	},
@@ -128,8 +166,8 @@ static const Instruction instructions[] = {
 		.default_operand_size = DEFAULT,
 		.first_operand = REG_32,
 		.max_first_operand_size = REG_64,
-		.second_operand = REG_32,
-		.max_sec_operand_size = REG_64
+		.second_operand = REG_MEM_32,
+		.max_sec_operand_size = REG_MEM_64
 	},
 	{
 		.opcode = 0xB8,
@@ -156,18 +194,37 @@ static const Instruction instructions[] = {
 	},
 	{
 		.opcode = 0x0FB6,
-		.mnemonic = "movzx",
+		.mnemonic = "movzxb",
 		.expect_modrm = TRUE,
-		.dynamic_operands_size = TRUE,
 		.default_operand_size = DEFAULT,
 		.first_operand = REG_32,
 		.max_first_operand_size = REG_64,
-		.second_operand = REG_8,
-		.max_sec_operand_size = REG_8
+		.second_operand = REG_MEM_8,
+		.max_sec_operand_size = REG_MEM_8
+	},
+	{
+		.opcode = 0x0FB7,
+		.mnemonic = "movzxw",
+		.expect_modrm = TRUE,
+		.default_operand_size = DEFAULT,
+		.first_operand = REG_32,
+		.max_first_operand_size = REG_64,
+		.second_operand = REG_MEM_16,
+		.max_sec_operand_size = REG_MEM_16
 	},
 	{
 		.opcode = 0x50,
 		.mnemonic = "push",
+		.expect_modrm = FALSE,
+		.dynamic_operands_size = TRUE,
+		.default_operand_size = BIT_64,
+		.first_operand = NONE,
+		.second_operand = NONE,
+		.embedded_reg = TRUE
+	},
+	{
+		.opcode = 0x58,
+		.mnemonic = "pop",
 		.expect_modrm = FALSE,
 		.dynamic_operands_size = TRUE,
 		.default_operand_size = BIT_64,
@@ -200,6 +257,52 @@ static const Instruction instructions[] = {
 		.max_first_operand_size = REG_64,
 		.second_operand = IMM_8,
 		.max_sec_operand_size = IMM_8
+	},
+	{
+		.opcode = 0x38,
+		.mnemonic = "cmp",
+		.expect_modrm = TRUE,
+		.dynamic_operands_size = TRUE,
+		.default_operand_size = BIT_8,
+		.first_operand = REG_MEM_8,
+		.max_first_operand_size = REG_MEM_8,
+		.second_operand = REG_8,
+		.max_sec_operand_size = REG_8
+	},
+	{
+		.opcode = 0xC1,
+		.mnemonic = "sal",
+		.use_opcode_reg_dist = TRUE,
+		.opcode_reg = 0x04,
+		.expect_modrm = TRUE,
+		.default_operand_size = BIT_64,
+		.first_operand = REG_MEM_32,
+		.max_first_operand_size = REG_MEM_64,
+		.second_operand = IMM_8,
+		.max_sec_operand_size = IMM_8
+	},
+	{
+		.opcode = 0xC1,
+		.mnemonic = "shr",
+		.use_opcode_reg_dist = TRUE,
+		.opcode_reg = 0x05,
+		.expect_modrm = TRUE,
+		.default_operand_size = BIT_64,
+		.first_operand = REG_MEM_32,
+		.max_first_operand_size = REG_MEM_64,
+		.second_operand = IMM_8,
+		.max_sec_operand_size = IMM_8
+	},
+	{
+		.opcode = 0x09,
+		.mnemonic = "or",
+		.expect_modrm = TRUE,
+		.dynamic_operands_size = TRUE,
+		.default_operand_size = DEFAULT,
+		.first_operand = REG_MEM_32,
+		.max_first_operand_size = REG_MEM_64,
+		.second_operand = REG_32,
+		.max_sec_operand_size = REG_64
 	},
 	// TODO: The following should be better determined: "Many disassemblers prefer je after cmp instructions, and jz after operations like test"
 	{
@@ -235,6 +338,17 @@ static const Instruction instructions[] = {
 		.max_first_operand_size = IMM_8,
 		.second_operand = NONE,
 		.max_sec_operand_size = NONE
+	},
+	{
+		.opcode = 0x85,
+		.mnemonic = "test",
+		.expect_modrm = TRUE,
+		.dynamic_operands_size = TRUE,
+		.default_operand_size = DEFAULT,
+		.first_operand = REG_MEM_32,
+		.max_first_operand_size = REG_MEM_64,
+		.second_operand = REG_32,
+		.max_sec_operand_size = REG_64
 	}
 };
 
@@ -350,60 +464,124 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 		machine_data++;
 		ins_size++;
 		
-		// TODO: The order and type of the operands should be better taken into consideration
-		if (mod == 0x03) {
-			int pos = str_len(ins_info -> ins_str);
-			if (pos == MAX_DISASM_INS_LEN) return ins_size;
-			mem_set(ins_info -> ins_str + pos, ' ', sizeof(char));
-			str_cpy(ins_info -> ins_str + pos + 1, regs[operand_size][rm]);
-		} else {
-			DEBUG("mod: 0x%X, rm: 0x%X, reg: 0x%X", mod, rm, reg);
-			u8 displacement_size = mod * mod;
-			bool only_displacement = mod == 0 && rm == 0x05;
-			
-			int pos = str_len(ins_info -> ins_str);
-			if (pos == MAX_DISASM_INS_LEN) return ins_size;
-			str_cpy(ins_info -> ins_str + pos, " [");
-			
-			if (!only_displacement) str_cpy(ins_info -> ins_str + pos + 2, regs[2][rm]);
-			else displacement_size = 4;
-
-			if (rm == 0x04) TODO("implement SIB handling.");
-			
-			int displacement = 0;
-			mem_cpy(&displacement, machine_data, displacement_size);
-			if (displacement_size == 1) displacement = *((char*) &displacement);
-
-			machine_data += displacement_size, ins_size += displacement_size;
-			
-			if (displacement != 0) {
-				if (only_displacement && displacement < 0) mem_set(ins_info -> ins_str + str_len(ins_info -> ins_str), '-', sizeof(char));
-				else if (displacement < 0) str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), " - ");
-				else str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), " + ");
-				
-				displacement = ABS(displacement);
-				
-				byte_str_into_dec_val(ins_info -> ins_str + str_len(ins_info -> ins_str), (u8*) &displacement, displacement_size);
-				mem_set(ins_info -> byte_ins + str_len(ins_info -> byte_ins), ' ', sizeof(char));
-				byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), machine_data - displacement_size, displacement_size);
-			}
-
-			mem_set(ins_info -> ins_str + str_len(ins_info -> ins_str), ']', sizeof(char));
-		}
-
+		OperandType first_operand = MIN(ins.first_operand + (ins.dynamic_operands_size * operand_effective_size_increment[operand_size]), ins.max_first_operand_size);
 		OperandType second_operand = MIN(ins.second_operand + (ins.dynamic_operands_size * operand_effective_size_increment[operand_size]), ins.max_sec_operand_size);
-		if (IS_IMM(second_operand)) {
+
+		// TODO: The order and type of the operands should be better taken into consideration
+		if (IS_MEM(ins.first_operand) || IS_REG_MEM(ins.first_operand)) {
+			if (mod == 0x03) {
+				int pos = str_len(ins_info -> ins_str);
+				if (pos == MAX_DISASM_INS_LEN) return ins_size;
+				mem_set(ins_info -> ins_str + pos, ' ', sizeof(char));
+				str_cpy(ins_info -> ins_str + pos + 1, regs[operand_size][rm]);
+			} else {
+				DEBUG("mod: 0x%X, rm: 0x%X, reg: 0x%X", mod, rm, reg);
+				u8 displacement_size = mod * mod;
+				bool only_displacement = mod == 0 && rm == 0x05;
+				
+				int pos = str_len(ins_info -> ins_str);
+				if (pos == MAX_DISASM_INS_LEN) return ins_size;
+				str_cpy(ins_info -> ins_str + pos, " [");
+				
+				if (!only_displacement) str_cpy(ins_info -> ins_str + pos + 2, regs[2][rm]);
+				else displacement_size = 4;
+
+				if (rm == 0x04) {
+					DEBUG("machine_data: 0x%X", *machine_data);
+					TODO("implement SIB handling.");
+				}
+
+				int displacement = 0;
+				mem_cpy(&displacement, machine_data, displacement_size);
+				if (displacement_size == 1) displacement = *((char*) &displacement);
+
+				machine_data += displacement_size, ins_size += displacement_size;
+				
+				if (displacement != 0) {
+					if (only_displacement && displacement < 0) mem_set(ins_info -> ins_str + str_len(ins_info -> ins_str), '-', sizeof(char));
+					else if (displacement < 0) str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), " - ");
+					else str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), " + ");
+					
+					displacement = ABS(displacement);
+					
+					byte_str_into_dec_val(ins_info -> ins_str + str_len(ins_info -> ins_str), (u8*) &displacement, displacement_size);
+					mem_set(ins_info -> byte_ins + str_len(ins_info -> byte_ins), ' ', sizeof(char));
+					byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), machine_data - displacement_size, displacement_size);
+				}
+
+				mem_set(ins_info -> ins_str + str_len(ins_info -> ins_str), ']', sizeof(char));
+			}
+		} else if (IS_REG(ins.first_operand)) {	
+			int pos = str_len(ins_info -> ins_str);
+			if (pos == MAX_DISASM_INS_LEN) return ins_size;
+			str_cpy(ins_info -> ins_str + pos, " ");
+			str_cpy(ins_info -> ins_str + pos + 1, regs[operand_size][reg]);
+		} else if (IS_IMM(first_operand)) {
+			u8 imm_size = 1U << (first_operand - IMM_8);
+			str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), " ");
+			byte_str_into_hex_val(ins_info -> ins_str + str_len(ins_info -> ins_str), machine_data, imm_size);
+			mem_set(ins_info -> byte_ins + str_len(ins_info -> byte_ins), ' ', sizeof(char));
+			byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), machine_data, imm_size);
+			ins_size += imm_size;
+		} 
+		
+		if (IS_MEM(ins.second_operand) || IS_REG_MEM(ins.second_operand)) {
+			if (mod == 0x03) {
+				int pos = str_len(ins_info -> ins_str);
+				if (pos == MAX_DISASM_INS_LEN) return ins_size;
+				str_cpy(ins_info -> ins_str + pos, ", ");
+				str_cpy(ins_info -> ins_str + pos + 2, regs[operand_size][rm]);
+			} else {
+				DEBUG("mod: 0x%X, rm: 0x%X, reg: 0x%X", mod, rm, reg);
+				u8 displacement_size = mod * mod;
+				bool only_displacement = mod == 0 && rm == 0x05;
+				
+				int pos = str_len(ins_info -> ins_str);
+				if (pos == MAX_DISASM_INS_LEN) return ins_size;
+				str_cpy(ins_info -> ins_str + pos, ", [");
+				
+				if (!only_displacement) str_cpy(ins_info -> ins_str + pos + 3, regs[2][rm]);
+				else displacement_size = 4;
+
+				if (rm == 0x04) TODO("implement SIB handling.");
+				
+				int displacement = 0;
+				mem_cpy(&displacement, machine_data, displacement_size);
+				if (displacement_size == 1) displacement = *((char*) &displacement);
+
+				machine_data += displacement_size, ins_size += displacement_size;
+				
+				if (displacement != 0) {
+					if (only_displacement && displacement < 0) mem_set(ins_info -> ins_str + str_len(ins_info -> ins_str), '-', sizeof(char));
+					else if (displacement < 0) str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), " - ");
+					else str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), " + ");
+					
+					displacement = ABS(displacement);
+					
+					byte_str_into_dec_val(ins_info -> ins_str + str_len(ins_info -> ins_str), (u8*) &displacement, displacement_size);
+					mem_set(ins_info -> byte_ins + str_len(ins_info -> byte_ins), ' ', sizeof(char));
+					byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), machine_data - displacement_size, displacement_size);
+				}
+
+				mem_set(ins_info -> ins_str + str_len(ins_info -> ins_str), ']', sizeof(char));
+			}
+		} else if (IS_IMM(second_operand)) {
 			u8 imm_size = 1U << (second_operand - IMM_8);
 			str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), ", ");
 			byte_str_into_hex_val(ins_info -> ins_str + str_len(ins_info -> ins_str), machine_data, imm_size);
 			mem_set(ins_info -> byte_ins + str_len(ins_info -> byte_ins), ' ', sizeof(char));
 			byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), machine_data, imm_size);
 			ins_size += imm_size;
-		} else if ((IS_REG(second_operand) || IS_MEM(second_operand))) {	
+		} else if (IS_REG(second_operand)) {	
 			int pos = str_len(ins_info -> ins_str);
 			if (pos == MAX_DISASM_INS_LEN) return ins_size;
 			str_cpy(ins_info -> ins_str + pos, ", ");
 			str_cpy(ins_info -> ins_str + pos + 2, regs[operand_size][reg]);
+		} else if (second_operand == DEFAULT_REG) {	
+			int pos = str_len(ins_info -> ins_str);
+			if (pos == MAX_DISASM_INS_LEN) return ins_size;
+			str_cpy(ins_info -> ins_str + pos, ", ");
+			str_cpy(ins_info -> ins_str + pos + 2, ins.default_reg);
 		}
 
 	 } else if (ins.embedded_reg) {
@@ -435,7 +613,12 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 			mem_set(ins_info -> byte_ins + str_len(ins_info -> byte_ins), ' ', sizeof(char));
 			byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), machine_data, imm_size);
 			ins_size += imm_size;
-		} 	
+		} else if (second_operand == DEFAULT_REG) {	
+			int pos = str_len(ins_info -> ins_str);
+			if (pos == MAX_DISASM_INS_LEN) return ins_size;
+			str_cpy(ins_info -> ins_str + pos, ", ");
+			str_cpy(ins_info -> ins_str + pos + 2, ins.default_reg);
+		}
 	 }
 
 	return ins_size;
