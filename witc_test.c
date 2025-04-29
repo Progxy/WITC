@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-/* #define _ENABLE_DEBUG_ */
+#define _ENABLE_DEBUG_
 
 #define _SUPPORT_FUNCTIONS_
 #define _SPECIAL_TYPE_SUPPORT_

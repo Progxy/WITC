@@ -30,7 +30,7 @@ efi_mem_cpy:
 	mov	rax, qword [rbp-8]	; dest_data.1_2, dest_data
 	lea	rcx, [rax+1]	; tmp107,
 	mov	qword [rbp-8], rcx	; dest_data, tmp107
-	movzx	edx, byte [rdx]	; _3, *src_data.0_1
+	movzx edx, byte [rdx]	; _3, *src_data.0_1
 	mov	byte [rax], dl	; *dest_data.1_2, _3
 
 .L5:

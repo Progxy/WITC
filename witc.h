@@ -145,7 +145,7 @@ static const Instruction instructions[] = {
 	},
 	{
 		.opcode = 0x0FB6,
-		.mnemonic = "movx",
+		.mnemonic = "movzx",
 		.expect_modrm = TRUE,
 		.dynamic_operands_size = TRUE,
 		.default_operand_size = DEFAULT,
@@ -322,24 +322,20 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 	};
 
 	if (ins.expect_modrm) {
-		u8 reg_mask = 0x38;
-		if (rex.r) reg_mask |= 0x40;
-		if (rex.b) reg_mask <<= 1;
-		u8 reg = (*machine_data & reg_mask) >> (3 + rex.b);
+		u8 reg_mask = 0x38 + rex.r * 0x40;
+		u8 reg = (*machine_data & (reg_mask << rex.b)) >> (3 + rex.b);
 
-		u8 mod_mask = 0xC0;
-		if (rex.b) mod_mask <<= 1;
-		if (rex.r) mod_mask <<= 1;
+		u8 mod_mask = 0xC0 << (rex.b + rex.r);
 		u8 mod = (*machine_data & mod_mask) >> (6 + rex.r + rex.b);
 
-		u8 rm_mask = 0x07;
-		if (rex.b) rm_mask |= 0x08;
+		u8 rm_mask = 0x07 | rex.b * 0x08;
 		u8 rm = *machine_data & rm_mask;
 		
 		mem_set(ins_info -> byte_ins + str_len(ins_info -> byte_ins), ' ', sizeof(char));
 		byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), machine_data, 1);
 		
 		// Increase size as we've read the ModRM byte
+		machine_data++;
 		ins_size++;
 		
 		// TODO: The order and type of the operands should be better taken into consideration
@@ -349,44 +345,37 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 			mem_set(ins_info -> ins_str + pos, ' ', sizeof(char));
 			str_cpy(ins_info -> ins_str + pos + 1, regs[operand_size][rm]);
 		} else {
-			DEBUG("mod: 0x%X", mod);
+			DEBUG("mod: 0x%X, rm: 0x%X, reg: 0x%X", mod, rm, reg);
+			u8 displacement_size = mod * mod;
+			bool only_displacement = mod == 0 && rm == 0x05;
+			
 			int pos = str_len(ins_info -> ins_str);
 			if (pos == MAX_DISASM_INS_LEN) return ins_size;
 			str_cpy(ins_info -> ins_str + pos, " [");
-			str_cpy(ins_info -> ins_str + pos + 2, regs[operand_size][rm]);
 			
-			if ((mod == 0x01 || mod == 0x02) && rm == 0x05) {
-				char offset = *(++machine_data);
-			   	ins_size++;
-				if (offset < 0) str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), " - ");
-				else str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), " + ");
-				offset = ABS(offset);
-				byte_str_into_dec_val(ins_info -> ins_str + str_len(ins_info -> ins_str), (u8*) &offset, 1);
-				mem_set(ins_info -> byte_ins + str_len(ins_info -> byte_ins), ' ', sizeof(char));
-				byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), machine_data, 1);
-			} else {
-				machine_data++, ins_size++;
-				u16 sib = *machine_data;
-				
-				u8 base = sib & (rex.b ? 0x07 : 0x0F);
-				
-				u8 index_mask = 0x38;
-				if (rex.x) index_mask |= 0x40;
-				if (rex.b) index_mask <<= 1;
-				u8 index = (sib & index_mask) >> (3 + rex.b);
-				
-				u8 scale = (sib & (0xC0 << (rex.x + rex.b))) >> (6 + rex.x + rex.b);
-				scale = 1 << scale;
+			if (!only_displacement) str_cpy(ins_info -> ins_str + pos + 2, regs[2][rm]);
+			else displacement_size = 4;
 
-				char offset = scale * index + base;
-				if (offset < 0) str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), " - ");
-				else str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), " + ");
-				offset = ABS(offset);
-				byte_str_into_dec_val(ins_info -> ins_str + str_len(ins_info -> ins_str), (u8*) &offset, 1);
-				mem_set(ins_info -> byte_ins + str_len(ins_info -> byte_ins), ' ', sizeof(char));
-				byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), machine_data, 1);
-			}
+			if (rm == 0x04) TODO("implement SIB handling.");
 			
+			int displacement = 0;
+			mem_cpy(&displacement, machine_data, displacement_size);
+			if (displacement_size == 1) displacement = *((char*) &displacement);
+
+			machine_data += displacement_size, ins_size += displacement_size;
+			
+			if (displacement != 0) {
+				if (only_displacement && displacement < 0) mem_set(ins_info -> ins_str + str_len(ins_info -> ins_str), '-', sizeof(char));
+				else if (displacement < 0) str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), " - ");
+				else str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), " + ");
+				
+				displacement = ABS(displacement);
+				
+				byte_str_into_dec_val(ins_info -> ins_str + str_len(ins_info -> ins_str), (u8*) &displacement, displacement_size);
+				mem_set(ins_info -> byte_ins + str_len(ins_info -> byte_ins), ' ', sizeof(char));
+				byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), machine_data - displacement_size, displacement_size);
+			}
+
 			mem_set(ins_info -> ins_str + str_len(ins_info -> ins_str), ']', sizeof(char));
 		}
 
@@ -394,7 +383,7 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 		if (IS_IMM(second_operand)) {
 			u8 imm_size = 1U << (second_operand - IMM_8);
 			str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), ", ");
-			byte_str_into_hex_val(ins_info -> ins_str + str_len(ins_info -> ins_str), ++machine_data, imm_size);
+			byte_str_into_hex_val(ins_info -> ins_str + str_len(ins_info -> ins_str), machine_data, imm_size);
 			mem_set(ins_info -> byte_ins + str_len(ins_info -> byte_ins), ' ', sizeof(char));
 			byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), machine_data, imm_size);
 			ins_size += imm_size;

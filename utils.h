@@ -33,6 +33,12 @@ typedef struct InsInfo {
 
 #ifdef _SUPPORT_FUNCTIONS_
 
+#define TODO(msg)           \
+	do {					\
+		printf(msg "\n");   \
+		abort();            \
+	} while(FALSE)            
+
 #define CAST_PTR(ptr, type) ((type*) (ptr))
 #define MAX(a, b) ((a) >= (b) ? (a) : (b)) 
 #define MIN(a, b) ((a) <= (b) ? (a) : (b)) 
@@ -46,43 +52,57 @@ typedef struct InsInfo {
 
 static size_t str_len(const char* str) {
     if (str == NULL) return 0;
-	size_t i = 0;
-    while (*str++) ++i;
-    return i;
+    const char* str_c = str;
+	while (*str++);
+    return (size_t) (str - str_c - 1);
 }
 
 #define mem_set(ptr, value, size)    mem_set_var(ptr, value, size, sizeof(u8))
 #define mem_set_32(ptr, value, size) mem_set_var(ptr, value, size, sizeof(u32))
 #define mem_set_64(ptr, value, size) mem_set_var(ptr, value, size, sizeof(u64))
-static void mem_set_var(void* ptr, int value, size_t size, size_t val_size) {
+static void mem_set_var(void* ptr, long long int value, size_t size, size_t val_size) {
 	if (ptr == NULL) return;
-	for (size_t i = 0; i < size; ++i) CAST_PTR(ptr, unsigned char)[i] = CAST_PTR(&value, unsigned char)[i % val_size]; 
+	u8* p = (u8*) ptr;
+	const size_t s = size;
+	while (size--) *p++ = CAST_PTR(&value, unsigned char)[(s - size) % val_size]; 
 	return;
 }
 
 static void* mem_cpy(void* dest, const void* src, size_t size) {
 	if (dest == NULL || src == NULL) return NULL;
-	for (size_t i = 0; i < size; ++i) CAST_PTR(dest, unsigned char)[i] = CAST_PTR(src, unsigned char)[i];
+	u8* dp = (u8*) dest;
+	u8* sp = (u8*) src;
+	while (size--) *dp++ = *sp++;
 	return dest;
 }
 
-static void mem_move(void* dest, const void* src, size_t size) {
-    if (dest == NULL || src == NULL || size == 0) return;
+static void* mem_move(void* dest, const void* src, size_t size) {
+    if (dest == NULL || src == NULL || size == 0) return NULL;
     
+	size_t s = size;
 	u8* temp = (u8*) calloc(size, sizeof(u8));
+	if (temp == NULL) {
+		printf("Failed to allocate the temp buffer for mem_move.\n");
+		return NULL;
+	}
 	
-	for (size_t i = 0; i < size; ++i) *CAST_PTR(temp + i, u8) = *CAST_PTR(CAST_PTR(src, u8) + i, u8); 
-    for (size_t i = 0; i < size; ++i) *CAST_PTR(CAST_PTR(dest, u8) + i, u8) = *CAST_PTR(temp + i, u8);
+	u8* dp = CAST_PTR(dest, u8);
+	u8* sp = (u8*) src;
+
+	while (size--) *temp++ = *sp++;
+	temp -= s, size = s;
+	while (s--)	*dp++ = *temp++;
+	
+	free(temp - size);
     
-	free(temp);
-    
-    return;
+    return dest;
 }
 
 static char* str_cpy(char* dest, const char* restrict src) {
 	if (dest == NULL || src == NULL) return NULL;
-	mem_cpy((void*) dest, (void*) src, str_len(src) + 1);
-	return (char*) dest;
+	char* o_dest = dest;
+  	while ((*dest++ = *src++));
+	return o_dest;
 }
 
 UNUSED_FUNCTION static int str_tok(const char* str, const char* delim) {
