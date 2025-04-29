@@ -3,16 +3,16 @@
 
 #include "./utils.h"
 
-typedef enum OperandType { NONE = 0, REGISTER, REG_8, REG_16, REG_32, REG_64, MEMORY, MEM_8, MEM_16, MEM_32, MEM_64, IMMEDIATE, IMM_8, IMM_16, IMM_32, IMM_64 } OperandType;
+typedef enum OperandType { NONE = 0, REG_8, REG_16, REG_32, REG_64, MEM_8, MEM_16, MEM_32, MEM_64, IMM_8, IMM_16, IMM_32, IMM_64 } OperandType;
 
 #define IS_IMM(val) ((val) >= IMM_8 && (val) <= IMM_64)
 #define IS_REG(val) ((val) >= REG_8 && (val) <= REG_64)
 #define IS_MEM(val) ((val) >= MEM_8 && (val) <= MEM_64)
 
 // TODO: Instead of DEFAULT should put 'BIT_32' for consistency
-typedef enum OperandSize { BIT_16, DEFAULT, BIT_64 } OperandSize;
-const int operand_effective_size_increment[] = { -1, 0, 1};
-const char suffixes[] = { 'w', 'd', 'q' };
+typedef enum OperandSize { BIT_16 = 0, DEFAULT, BIT_64, BIT_8 } OperandSize;
+const int operand_effective_size_increment[] = { -1, 0, 1, -2 };
+const char suffixes[] = { 'w', 'd', 'q', 'b' };
 
 typedef struct PACKED_STRUCT Rex {
 	u8 b: 1;
@@ -97,6 +97,17 @@ static const Instruction instructions[] = {
 		.max_first_operand_size = REG_64,
 		.second_operand = IMM_32,
 		.max_sec_operand_size = IMM_32
+	},
+	{
+		.opcode = 0x88,
+		.mnemonic = "mov",
+		.expect_modrm = TRUE,
+		.dynamic_operands_size = TRUE,
+		.default_operand_size = BIT_8,
+		.first_operand = REG_8,
+		.max_first_operand_size = REG_8,
+		.second_operand = REG_8,
+		.max_sec_operand_size = REG_8
 	},
 	{
 		.opcode = 0x89,
@@ -315,10 +326,11 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 
 	// TODO: The following should be put in another function maybe alongside another for SIB-decoding
 	
-	const char* regs[3][8] = {
+	const char* regs[4][8] = {
 		{ "ax", "cx", "dx", "bx", "sp", "bp", "si", "di" },
 		{ "eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi" },
-		{ "rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi" }
+		{ "rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi" },
+		{ "al", "cl", "dl", "bl", "sp", "bp", "sl", "dl" }
 	};
 
 	if (ins.expect_modrm) {
