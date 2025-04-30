@@ -483,19 +483,20 @@ static const Instruction instructions[] = {
 // ---------------------------------------------------------------
 // TODO: Prettify the following print
 static void bin_dump(u8* bin_data, u64 size) {
-    printf("\t╔══════════════════════════════════════╗\n");
-    printf("\t║         Bin Dump (%llu bytes)          ║\n", size);
-    printf("\t╠══════════════════════════════════════╣\n");
+    printf("\t╔══════════════════════════════════════════════════════════════╗\n");
+    printf("\t║                 Bin Dump (%llu bytes)                        ║\n", size);
+    printf("\t╠══════════════════════════════════════════════════════════════╣\n");
     
     for (u64 i = 0; i < size; ++i) {
-        if (i % 8 == 0) printf("\t║  0x%04llX: ", i);
+        if (i % 16 == 0) printf("\t║  0x%04llX: ", i);
         
         printf("%02X ", bin_data[i]);
         
-        if ((i + 1) % 8 == 0 || i == size - 1) printf(" %*.s║\n", (int) (i == size - 1 ? 3 * (8 - ((i + 1) % 8) + 1) : 3), " ");
+        if ((i + 1) % 16 == 0 || i == size - 1) printf(" %*.s║\n", (int) (i == size - 1 ? 3 * (16 - ((i + 1) % 16) + 1) : 3), " ");
     }
     
-    printf("\t╚══════════════════════════════════════╝\n\n");
+	printf("\t╚══════════════════════════════════════════════════════════════╝\n\n");
+    
 	return;
 }
 
@@ -619,7 +620,7 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 
 				if (rm == 0x04) {
 					DEBUG("machine_data: 0x%X", *machine_data);
-					// TODO("implement SIB handling.");
+					TODO("implement SIB handling.");
 					return 3;
 				}
 
