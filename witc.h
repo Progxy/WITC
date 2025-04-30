@@ -42,6 +42,14 @@ typedef struct Instruction {
 // TODO: Find a better ordering for the instructions: like alphabetical?
 static const Instruction instructions[] = {
 	{
+		.opcode = 0x0F0B,
+		.mnemonic = "ud2",
+		.expect_modrm = FALSE,
+		.dynamic_operands_size = FALSE,
+		.first_operand = NONE,
+		.second_operand = NONE
+	},
+	{
 		.opcode = 0x9B,
 		.mnemonic = "wait",
 		.expect_modrm = FALSE,
@@ -124,6 +132,26 @@ static const Instruction instructions[] = {
 		.second_operand = DEFAULT_REG,
 		.max_sec_operand_size= DEFAULT_REG,
 		.default_reg = "rax"
+	},
+	{
+		.opcode = 0xE8,
+		.mnemonic = "call",
+		.expect_modrm = FALSE,
+		.default_operand_size = DEFAULT,
+		.first_operand = IMM_32,
+		.max_first_operand_size = IMM_32,
+	},
+	{
+		.opcode = 0xC6,
+		.mnemonic = "mov",
+		.use_opcode_reg_dist = TRUE,
+		.opcode_reg = 0x00,
+		.expect_modrm = TRUE,
+		.default_operand_size = BIT_8,
+		.first_operand = REG_MEM_8,
+		.max_first_operand_size = REG_MEM_8,
+		.second_operand = IMM_8,
+		.max_sec_operand_size = IMM_8
 	},
 	{
 		.opcode = 0xC7,
@@ -246,6 +274,30 @@ static const Instruction instructions[] = {
 		.max_sec_operand_size = IMM_8
 	},
 	{
+		.opcode = 0x01,
+		.mnemonic = "add",
+		.expect_modrm = TRUE,
+		.dynamic_operands_size = TRUE,
+		.default_operand_size = DEFAULT,
+		.first_operand = REG_MEM_32,
+		.max_first_operand_size = REG_MEM_64,
+		.second_operand = REG_32,
+		.max_sec_operand_size = REG_64
+	},
+	{
+		.opcode = 0x83,
+		.mnemonic = "add",
+		.use_opcode_reg_dist = TRUE,
+		.opcode_reg = 0x00,
+		.expect_modrm = TRUE,
+		.dynamic_operands_size = TRUE,
+		.default_operand_size = DEFAULT,
+		.first_operand = REG_MEM_32,
+		.max_first_operand_size = REG_MEM_64,
+		.second_operand = IMM_8,
+		.max_sec_operand_size = IMM_8
+	},
+	{
 		.opcode = 0x83,
 		.mnemonic = "cmp",
 		.use_opcode_reg_dist = TRUE,
@@ -259,6 +311,18 @@ static const Instruction instructions[] = {
 		.max_sec_operand_size = IMM_8
 	},
 	{
+		.opcode = 0x80,
+		.mnemonic = "cmp",
+		.use_opcode_reg_dist = TRUE,
+		.opcode_reg = 0x07,
+		.expect_modrm = TRUE,
+		.default_operand_size = BIT_8,
+		.first_operand = REG_MEM_8,
+		.max_first_operand_size = REG_MEM_8,
+		.second_operand = IMM_8,
+		.max_sec_operand_size = IMM_8
+	},
+	{
 		.opcode = 0x38,
 		.mnemonic = "cmp",
 		.expect_modrm = TRUE,
@@ -268,6 +332,17 @@ static const Instruction instructions[] = {
 		.max_first_operand_size = REG_MEM_8,
 		.second_operand = REG_8,
 		.max_sec_operand_size = REG_8
+	},
+	{
+		.opcode = 0x39,
+		.mnemonic = "cmp",
+		.expect_modrm = TRUE,
+		.dynamic_operands_size = TRUE,
+		.default_operand_size = DEFAULT,
+		.first_operand = REG_MEM_32,
+		.max_first_operand_size = REG_MEM_64,
+		.second_operand = REG_32,
+		.max_sec_operand_size = REG_64
 	},
 	{
 		.opcode = 0xC1,
@@ -316,10 +391,33 @@ static const Instruction instructions[] = {
 		.second_operand = NONE,
 		.max_sec_operand_size = NONE
 	},
+	{
+		.opcode = 0x0F84,
+		.mnemonic = "je",
+		.expect_modrm = FALSE,
+		.dynamic_operands_size = FALSE,
+		.default_operand_size = DEFAULT,
+		.first_operand = IMM_32,
+		.max_first_operand_size = IMM_32,
+		.second_operand = NONE,
+		.max_sec_operand_size = NONE
+	},
 	// TODO: The following should be better determined: "Many disassemblers prefer je after cmp instructions, and jz after operations like test"
 	{
 		.opcode = 0x75,
 		.mnemonic = "jne",
+		.expect_modrm = FALSE,
+		.dynamic_operands_size = FALSE,
+		.default_operand_size = DEFAULT,
+		.first_operand = IMM_8,
+		.max_first_operand_size = IMM_8,
+		.second_operand = NONE,
+		.max_sec_operand_size = NONE
+	},
+	// TODO: The following should be better determined: "Many disassemblers prefer je after cmp instructions, and jz after operations like test"
+	{
+		.opcode = 0x72,
+		.mnemonic = "jb",
 		.expect_modrm = FALSE,
 		.dynamic_operands_size = FALSE,
 		.default_operand_size = DEFAULT,
@@ -338,6 +436,27 @@ static const Instruction instructions[] = {
 		.max_first_operand_size = IMM_8,
 		.second_operand = NONE,
 		.max_sec_operand_size = NONE
+	},
+	{
+		.opcode = 0xE9,
+		.mnemonic = "jmp",
+		.expect_modrm = FALSE,
+		.dynamic_operands_size = FALSE,
+		.default_operand_size = DEFAULT,
+		.first_operand = IMM_32,
+		.max_first_operand_size = IMM_32,
+		.second_operand = NONE,
+		.max_sec_operand_size = NONE
+	},
+	{
+		.opcode = 0x84,
+		.mnemonic = "test",
+		.expect_modrm = TRUE,
+		.default_operand_size = BIT_8,
+		.first_operand = REG_MEM_8,
+		.max_first_operand_size = REG_MEM_8,
+		.second_operand = REG_8,
+		.max_sec_operand_size = REG_8
 	},
 	{
 		.opcode = 0x85,
@@ -396,7 +515,7 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 	OperandSize operand_size = DEFAULT;
 	if (prefix >= 0x40 && prefix <= 0x4F) {
 		rex = *((Rex*) (&prefix));
-		operand_size = BIT_64;
+		if (rex.w) operand_size = BIT_64;
 		DEBUG("Rex: { w: %u, r: %u, x: %u, b: %u}", rex.w, rex.r, rex.x, rex.b);
 		if (ins_size >= size) return -1;
 		machine_data++, ins_size++;
@@ -433,7 +552,8 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 	// TODO: Should most probably introduce an append_str function
 	byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), (u8*) machine_data - match_ins_size, match_ins_size);
 	str_cpy(ins_info -> ins_str, ins.mnemonic);
-	if (ins.dynamic_operands_size) {
+	// TODO: The latter condition should be revised or the entries in Instructions should be modified to have .default_operand_size = DEFAULT
+	if (ins.dynamic_operands_size || ins.default_operand_size != DEFAULT) {
 		if (operand_size == DEFAULT) operand_size = ins.default_operand_size;
 		mem_set(ins_info -> ins_str + str_len(ins_info -> ins_str), suffixes[operand_size], sizeof(char));
 	}
@@ -488,7 +608,8 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 
 				if (rm == 0x04) {
 					DEBUG("machine_data: 0x%X", *machine_data);
-					TODO("implement SIB handling.");
+					// TODO("implement SIB handling.");
+					return 3;
 				}
 
 				int displacement = 0;
@@ -592,8 +713,10 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 		str_cpy(ins_info -> ins_str + pos + 1, regs[operand_size][reg]);
 	 } 
 	 
+	// TODO: The following and the subsequent similar if should be integrated
 	if (!ins.expect_modrm && ins.first_operand != NONE) {
 		OperandType first_operand = MIN(ins.first_operand + (ins.dynamic_operands_size * operand_effective_size_increment[operand_size]), ins.max_first_operand_size);
+		// TODO: Should probably check if the value is negative and note it
 		if (IS_IMM(first_operand)) {
 			u8 imm_size = 1U << (first_operand - IMM_8);
 			mem_set(ins_info -> ins_str + str_len(ins_info -> ins_str), ' ', sizeof(char));
