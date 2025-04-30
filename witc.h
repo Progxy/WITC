@@ -9,6 +9,14 @@ typedef enum OperandType { NONE = 0, DEFAULT_REG, REG_8, REG_16, REG_32, REG_64,
 #define IS_REG(val)     ((val) >= REG_8     && (val) <= REG_64)
 #define IS_MEM(val)     ((val) >= MEM_8     && (val) <= MEM_64)
 #define IS_REG_MEM(val) ((val) >= REG_MEM_8 && (val) <= REG_MEM_64)
+#define BIT_8_TYPE(val)                              \
+	(IS_IMM(val) ? IMM_8 :                           \
+		(IS_REG(val) ? REG_8 :                       \
+			(IS_MEM(val) ? MEM_8 :                   \
+				(IS_REG_MEM(val) ? REG_MEM_8 : NONE) \
+			)                                        \
+		)                                            \
+	)
 
 // TODO: Instead of DEFAULT should put 'BIT_32' for consistency
 typedef enum OperandSize { BIT_16 = 0, DEFAULT, BIT_64, BIT_8 } OperandSize;
@@ -317,6 +325,7 @@ static const Instruction instructions[] = {
 		.opcode_reg = 0x07,
 		.expect_modrm = TRUE,
 		.default_operand_size = BIT_8,
+		.dynamic_operands_size = TRUE,
 		.first_operand = REG_MEM_8,
 		.max_first_operand_size = REG_MEM_8,
 		.second_operand = IMM_8,
@@ -552,8 +561,7 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 	// TODO: Should most probably introduce an append_str function
 	byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), (u8*) machine_data - match_ins_size, match_ins_size);
 	str_cpy(ins_info -> ins_str, ins.mnemonic);
-	// TODO: The latter condition should be revised or the entries in Instructions should be modified to have .default_operand_size = DEFAULT
-	if (ins.dynamic_operands_size || ins.default_operand_size != DEFAULT) {
+	if (ins.dynamic_operands_size) {
 		if (operand_size == DEFAULT) operand_size = ins.default_operand_size;
 		mem_set(ins_info -> ins_str + str_len(ins_info -> ins_str), suffixes[operand_size], sizeof(char));
 	}
@@ -584,8 +592,11 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 		machine_data++;
 		ins_size++;
 		
-		OperandType first_operand = MIN(ins.first_operand + (ins.dynamic_operands_size * operand_effective_size_increment[operand_size]), ins.max_first_operand_size);
-		OperandType second_operand = MIN(ins.second_operand + (ins.dynamic_operands_size * operand_effective_size_increment[operand_size]), ins.max_sec_operand_size);
+		OperandType first_operand = ins.first_operand + ins.dynamic_operands_size * operand_effective_size_increment[operand_size];
+		OperandType second_operand = ins.second_operand + ins.dynamic_operands_size * operand_effective_size_increment[operand_size];
+		
+		first_operand = CLAMP(first_operand,  BIT_8_TYPE(ins.first_operand),  ins.max_first_operand_size);
+		second_operand = CLAMP(second_operand, BIT_8_TYPE(ins.second_operand), ins.max_sec_operand_size);
 
 		// TODO: The order and type of the operands should be better taken into consideration
 		if (IS_MEM(ins.first_operand) || IS_REG_MEM(ins.first_operand)) {

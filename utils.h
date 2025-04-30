@@ -44,6 +44,8 @@ typedef struct InsInfo {
 #define MIN(a, b) ((a) <= (b) ? (a) : (b)) 
 #define ABS(a)    ((a) < 0 ? -(a) : (a))
 
+#define CLAMP(val, min, max) ((val) > (max) ? (max) : ((val) < (min) ? (min) : (val)))
+
 #ifdef _ENABLE_DEBUG_
 	#define DEBUG(fmt, ...)  printf("\033[38;5;214m[" __FILE__ "::%u]\033[35m DEBUG: \033[0m" fmt "\n", __LINE__, ##__VA_ARGS__)
 #else
