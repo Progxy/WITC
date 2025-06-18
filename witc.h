@@ -5,6 +5,10 @@
 
 typedef enum OperandType { NONE = 0, DEFAULT_REG, REG_8, REG_16, REG_32, REG_64, MEM_8, MEM_16, MEM_32, MEM_64, REG_MEM_8, REG_MEM_16, REG_MEM_32, REG_MEM_64, IMM_8, IMM_16, IMM_32, IMM_64 } OperandType;
 
+#define REG_MASK 0x38
+#define MOD_MASK 0xC0
+#define RM_MASK  0x07
+
 #define IS_IMM(val)     ((val) >= IMM_8     && (val) <= IMM_64)
 #define IS_REG(val)     ((val) >= REG_8     && (val) <= REG_64)
 #define IS_MEM(val)     ((val) >= MEM_8     && (val) <= MEM_64)
@@ -481,7 +485,6 @@ static const Instruction instructions[] = {
 };
 
 // ---------------------------------------------------------------
-// TODO: Prettify the following print
 static void bin_dump(u8* bin_data, u64 size) {
     printf("\t╔══════════════════════════════════════════════════════════════╗\n");
     printf("\t║                 Bin Dump (%llu bytes)                        ║\n", size);
@@ -568,23 +571,17 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 	}
 
 	// TODO: The following should be put in another function maybe alongside another for SIB-decoding
-	
-	const char* regs[4][8] = {
-		{ "ax", "cx", "dx", "bx", "sp", "bp", "si", "di" },
-		{ "eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi" },
-		{ "rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi" },
-		{ "al", "cl", "dl", "bl", "sp", "bp", "sl", "dl" }
+	const char* regs[4][16] = {
+		{ "ax", "cx", "dx", "bx", "sp", "bp", "si", "di","r8w", "r9w", "r10w", "r11w", "r12w", "r13w", "r14w", "r15w" },
+		{ "eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi", "r8d", "r9d", "r10d", "r11d", "r12d", "r13d", "r14d", "r15d" },
+		{ "rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15" },
+		{ "al", "cl", "dl", "bl", "sp", "bp", "sl", "dl", "r8b", "r9b", "r10b", "r11b", "r12b", "r13b", "r14b", "r15b" }
 	};
 
 	if (ins.expect_modrm) {
-		u8 reg_mask = 0x38 + rex.r * 0x40;
-		u8 reg = (*machine_data & (reg_mask << rex.b)) >> (3 + rex.b);
-
-		u8 mod_mask = 0xC0 << (rex.b + rex.r);
-		u8 mod = (*machine_data & mod_mask) >> (6 + rex.r + rex.b);
-
-		u8 rm_mask = 0x07 | rex.b * 0x08;
-		u8 rm = *machine_data & rm_mask;
+		u8 reg = (*machine_data & REG_MASK) >> 3 | (rex.r << 3);
+		u8 mod = (*machine_data & MOD_MASK) >> 6;
+		u8 rm = (*machine_data & RM_MASK) | (rex.b << 3);
 		
 		mem_set(ins_info -> byte_ins + str_len(ins_info -> byte_ins), ' ', sizeof(char));
 		byte_str_into_hex_str(ins_info -> byte_ins + str_len(ins_info -> byte_ins), machine_data, 1);
@@ -619,7 +616,7 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 				else displacement_size = 4;
 
 				if (rm == 0x04) {
-					DEBUG("machine_data: 0x%X", *machine_data);
+					DEBUG("machine_data: 0x%X", *(machine_data - 1));
 					TODO("implement SIB handling.");
 					return 3;
 				}
