@@ -11,7 +11,6 @@ static const char* regs[4][16] = {
 	{ "al", "cl", "dl", "bl", "sp", "bp", "sl", "dl", "r8b", "r9b", "r10b", "r11b", "r12b", "r13b", "r14b", "r15b" }
 };
 
-// ---------------------------------------------------------------
 static inline int simple_ins_match(const u8* machine_data, const u64 size, u64* match_ins_size) {
 	u64 opcode = *machine_data++;
 	for (; *match_ins_size <= size; ++(*match_ins_size)) {
