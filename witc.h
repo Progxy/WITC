@@ -485,24 +485,6 @@ static const Instruction instructions[] = {
 };
 
 // ---------------------------------------------------------------
-static void bin_dump(u8* bin_data, u64 size) {
-    printf("\t╔══════════════════════════════════════════════════════════════╗\n");
-    printf("\t║                 Bin Dump (%llu bytes)                        ║\n", size);
-    printf("\t╠══════════════════════════════════════════════════════════════╣\n");
-    
-    for (u64 i = 0; i < size; ++i) {
-        if (i % 16 == 0) printf("\t║  0x%04llX: ", i);
-        
-        printf("%02X ", bin_data[i]);
-        
-        if ((i + 1) % 16 == 0 || i == size - 1) printf(" %*.s║\n", (int) (i == size - 1 ? 3 * (16 - ((i + 1) % 16) + 1) : 3), " ");
-    }
-    
-	printf("\t╚══════════════════════════════════════════════════════════════╝\n\n");
-    
-	return;
-}
-
 static inline int simple_ins_match(const u8* machine_data, const u64 size, u64* match_ins_size) {
 	u64 opcode = *machine_data++;
 	for (; *match_ins_size <= size; ++(*match_ins_size)) {
@@ -522,7 +504,7 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 	u8 prefix = *machine_data;
 	u64 ins_size = 0;
 
-	// TODO: The following should be inserted in a function factoring out the latter if statement
+	// TODO: The following should be inserted in a function refactoring out the latter if statement
 	// Instruction defaults to 32-bits, so this suffix is always present
 	Rex rex = {0};
 	OperandSize operand_size = DEFAULT;
@@ -618,7 +600,7 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 				if (rm == 0x04) {
 					DEBUG("machine_data: 0x%X", *(machine_data - 1));
 					TODO("implement SIB handling.");
-					return 3;
+					return -1;
 				}
 
 				int displacement = 0;
@@ -673,8 +655,11 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 				if (!only_displacement) str_cpy(ins_info -> ins_str + pos + 3, regs[2][rm]);
 				else displacement_size = 4;
 
-				if (rm == 0x04) TODO("implement SIB handling.");
-				
+				if (rm == 0x04) { 
+					TODO("implement SIB handling.");
+					return -1;
+				}
+
 				int displacement = 0;
 				mem_cpy(&displacement, machine_data, displacement_size);
 				if (displacement_size == 1) displacement = *((char*) &displacement);
@@ -725,7 +710,6 @@ static int decode_instruction(const u8* machine_data, const u64 size, InsInfo* i
 	// TODO: The following and the subsequent similar if should be integrated
 	if (!ins.expect_modrm && ins.first_operand != NONE) {
 		OperandType first_operand = MIN(ins.first_operand + (ins.dynamic_operands_size * operand_effective_size_increment[operand_size]), ins.max_first_operand_size);
-		// TODO: Should probably check if the value is negative and note it
 		if (IS_IMM(first_operand)) {
 			u8 imm_size = 1U << (first_operand - IMM_8);
 			mem_set(ins_info -> ins_str + str_len(ins_info -> ins_str), ' ', sizeof(char));
