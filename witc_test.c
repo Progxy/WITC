@@ -5,6 +5,7 @@
 
 #define _SUPPORT_FUNCTIONS_
 #define _SPECIAL_TYPE_SUPPORT_
+#define _BASE_SUPPORT_FUNCTIONS_
 #include "./witc.h"
 
 int main(int argc, char** argv) {
