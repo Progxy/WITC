@@ -1,6 +1,5 @@
-#ifndef _UTILS_H_
-#define _UTILS_H_
-
+#ifndef _WITC_UTILS_H_
+#define _WITC_UTILS_H_
 
 #ifdef _SPECIAL_TYPE_SUPPORT_
 #define STATIC_ASSERT          _Static_assert
@@ -28,6 +27,9 @@ typedef struct InsInfo {
 	char byte_ins[MAX_BYTE_REPR_LEN];
 } InsInfo;
 
+#define ABS(a)    ((a) < 0 ? -(a) : (a))
+#define CLAMP(val, min, max) ((val) > (max) ? (max) : ((val) < (min) ? (min) : (val)))
+
 #ifdef _SUPPORT_FUNCTIONS_
 #define ARR_SIZE(arr) (sizeof(arr) / sizeof(*(arr)))
 #define PACKED_STRUCT __attribute__((packed))
@@ -42,9 +44,6 @@ typedef struct InsInfo {
 #define CAST_PTR(ptr, type) ((type*) (ptr))
 #define MAX(a, b) ((a) >= (b) ? (a) : (b)) 
 #define MIN(a, b) ((a) <= (b) ? (a) : (b)) 
-#define ABS(a)    ((a) < 0 ? -(a) : (a))
-
-#define CLAMP(val, min, max) ((val) > (max) ? (max) : ((val) < (min) ? (min) : (val)))
 
 #ifdef _ENABLE_DEBUG_
 	#define DEBUG(fmt, ...)  printf("\033[38;5;214m[" __FILE__ "::%u]\033[35m DEBUG: \033[0m" fmt "\n", __LINE__, ##__VA_ARGS__)
@@ -221,4 +220,4 @@ static void byte_str_into_dec_val(char* str, const u8* byte_str, u8 byte_size) {
 
 #endif //_BASE_SUPPORT_FUNCTIONS_
 
-#endif //_UTILS_H_
+#endif //_WITC_UTILS_H_
