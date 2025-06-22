@@ -208,7 +208,8 @@ static const Instruction instructions[] = {
 		.expect_modrm = FALSE,
 		.dynamic_operands_size = TRUE,
 		.default_operand_size = BIT_64,
-		.first_operand = NONE,
+		.first_operand = REG_32,
+		.max_first_operand_size = REG_64,
 		.second_operand = NONE,
 		.embedded_reg = TRUE
 	},
@@ -218,7 +219,8 @@ static const Instruction instructions[] = {
 		.expect_modrm = FALSE,
 		.dynamic_operands_size = TRUE,
 		.default_operand_size = BIT_64,
-		.first_operand = NONE,
+		.first_operand = REG_32,
+		.max_first_operand_size = REG_64,
 		.second_operand = NONE,
 		.embedded_reg = TRUE
 	},

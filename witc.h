@@ -41,7 +41,10 @@ static int decode_modrm_operand(bool is_first_operand, OperandType operand, Oper
 			set_char(ins_info -> ins_str + pos + 1, '[');
 			
 			if (!only_displacement) str_cpy(ins_info -> ins_str + pos + 2, regs[2][rm]);
-			else displacement_size = 4;
+			else {
+				str_cpy(ins_info -> ins_str + pos + 2, "rip");
+				displacement_size = 4;
+			}
 
 			if (rm == 0x04) {
 				DEBUG("machine_data: 0x%X", *(machine_data - 1));
@@ -56,7 +59,7 @@ static int decode_modrm_operand(bool is_first_operand, OperandType operand, Oper
 			machine_data += displacement_size, (*ins_size) += displacement_size;
 			
 			if (displacement != 0) {
-				if (only_displacement && displacement < 0) mem_set(ins_info -> ins_str + str_len(ins_info -> ins_str), '-', sizeof(char));
+				if (only_displacement && displacement < 0) set_char(ins_info -> ins_str + str_len(ins_info -> ins_str), '-');
 				else if (displacement < 0) str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), " - ");
 				else str_cpy(ins_info -> ins_str + str_len(ins_info -> ins_str), " + ");
 				
