@@ -27,7 +27,9 @@ typedef struct InsInfo {
 	char byte_ins[MAX_BYTE_REPR_LEN];
 } InsInfo;
 
-#define ABS(a)    ((a) < 0 ? -(a) : (a))
+#ifndef ABS
+	#define ABS(a)    ((a) < 0 ? -(a) : (a))
+#endif // ABS
 #define CLAMP(val, min, max) ((val) > (max) ? (max) : ((val) < (min) ? (min) : (val)))
 
 #ifdef _SUPPORT_FUNCTIONS_
